@@ -4,7 +4,7 @@ import { useBudgets as useSupabaseBudgets, addBudget as addSupabaseBudget, updat
 import { useAccountBalances as useSupabaseAccountBalances, addAccountBalance as addSupabaseAccountBalance, updateAccountBalance as updateSupabaseAccountBalance, deleteAccountBalance as deleteSupabaseAccountBalance } from "./supabase/account-balances";
 import { useGoals as useSupabaseGoals, addGoal as addSupabaseGoal, updateGoal as updateSupabaseGoal, deleteGoal as deleteSupabaseGoal } from "./supabase/goals";
 import { useFixedBills as useSupabaseFixedBills, addFixedBill as addSupabaseFixedBill, updateFixedBill as updateSupabaseFixedBill, deleteFixedBill as deleteSupabaseFixedBill, markFixedBillPaid as markSupabaseFixedBillPaid } from "./supabase/fixed-bills";
-import { useReceivables as useSupabaseReceivables, addReceivable as addSupabaseReceivable, updateReceivable as updateSupabaseReceivable, deleteReceivable as deleteSupabaseReceivable } from "./supabase/receivables";
+import { useReceivables as useSupabaseReceivables, addReceivable as addSupabaseReceivable, updateReceivable as updateSupabaseReceivable, deleteReceivable as deleteSupabaseReceivable, markReceivableReceived as markSupabaseReceivableReceived, type Receivable as SupabaseReceivable } from "./supabase/receivables";
 
 // Categories and accounts are dynamic strings so the user can create new ones.
 export type Category = string;
@@ -268,29 +268,7 @@ export async function updateReceivable(id: string, patch: Partial<Omit<Receivabl
 }
 
 export async function markReceivableReceived(receivable: Receivable, received: boolean) {
-  if (!received) {
-    return updateSupabaseReceivable(receivable.id, {
-      received: false,
-      receivedAt: undefined,
-    });
-  }
-  if (receivable.received && receivable.txId) return receivable;
-
-  const receivedAt = new Date().toISOString();
-  const tx = await addSupabaseTransaction({
-    amount: receivable.amount,
-    type: "income",
-    category: "Outros",
-    account: "Nubank",
-    date: receivedAt,
-    description: receivable.name,
-    note: 'Dinheiro recebido via "Dinheiro a receber"',
-  });
-  return updateSupabaseReceivable(receivable.id, {
-    received: true,
-    receivedAt,
-    txId: tx.id,
-  });
+  return markSupabaseReceivableReceived(receivable as SupabaseReceivable, received);
 }
 
 export async function deleteReceivable(id: string) {

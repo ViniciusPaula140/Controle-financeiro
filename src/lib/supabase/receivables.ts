@@ -3,6 +3,15 @@ import { useAuth } from './auth-context';
 import { useEffect, useState } from 'react';
 import { mapReceivableFromDb, mapReceivableToDb } from './mappers';
 import { realtimeChannelName, requireRow } from './realtime-utils';
+import { addTransaction, deleteTransaction } from './transactions';
+
+export const RECEIVABLE_ALREADY_RECEIVED_DELETE_MSG =
+  'Não é possível excluir um registro já recebido. Desmarque-o primeiro.';
+
+type ReceivablePatch = Partial<Omit<Receivable, 'id' | 'user_id'>> & {
+  txId?: string | null;
+  receivedAt?: string | null;
+};
 
 export interface Receivable {
   id: string;
@@ -116,7 +125,7 @@ export async function addReceivable(receivable: Omit<Receivable, 'id' | 'user_id
   return mapReceivableFromDb(requireRow(data, 'inserção de recebível'));
 }
 
-export async function updateReceivable(id: string, patch: Partial<Omit<Receivable, 'id' | 'user_id'>>) {
+export async function updateReceivable(id: string, patch: ReceivablePatch) {
   if (!supabase) throw new Error('Supabase client is not configured');
 
   const { data, error } = await supabase
@@ -130,8 +139,53 @@ export async function updateReceivable(id: string, patch: Partial<Omit<Receivabl
   return mapReceivableFromDb(requireRow(data, 'atualização de recebível'));
 }
 
+export async function markReceivableReceived(receivable: Receivable, received: boolean) {
+  if (!received) {
+    if (receivable.txId) {
+      await deleteTransaction(receivable.txId);
+    }
+    return updateReceivable(receivable.id, {
+      received: false,
+      receivedAt: null,
+      txId: null,
+    });
+  }
+
+  if (receivable.received && receivable.txId) return receivable;
+
+  const receivedAt = new Date().toISOString();
+  const tx = await addTransaction({
+    amount: receivable.amount,
+    type: 'income',
+    category: 'Outros',
+    account: 'Nubank',
+    date: receivedAt,
+    description: receivable.name,
+    note: 'Recebido via "Receber dinheiro"',
+  });
+
+  return updateReceivable(receivable.id, {
+    received: true,
+    receivedAt,
+    txId: tx.id,
+  });
+}
+
 export async function deleteReceivable(id: string) {
   if (!supabase) throw new Error('Supabase client is not configured');
+
+  const { data, error: fetchError } = await supabase
+    .from('dinheiro_receber')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+
+  if (fetchError) throw fetchError;
+
+  const receivable = data ? mapReceivableFromDb(data) : null;
+  if (receivable?.received) {
+    throw new Error(RECEIVABLE_ALREADY_RECEIVED_DELETE_MSG);
+  }
 
   const { error } = await supabase.from('dinheiro_receber').delete().eq('id', id);
   if (error) throw error;

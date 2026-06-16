@@ -152,7 +152,10 @@ export function mapReceivableFromDb(row: DbRow): Receivable {
 }
 
 export function mapReceivableToDb(
-  receivable: Partial<Omit<Receivable, 'id' | 'user_id'>>,
+  receivable: Partial<Omit<Receivable, 'id' | 'user_id'>> & {
+    txId?: string | null;
+    receivedAt?: string | null;
+  },
 ): DbRow {
   const row: DbRow = {};
   if (receivable.name !== undefined) row.nome = receivable.name;

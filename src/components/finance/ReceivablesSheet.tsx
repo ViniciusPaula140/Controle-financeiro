@@ -37,6 +37,7 @@ import {
   type Receivable,
 } from "@/lib/finance-store";
 import { supabaseErrorMessage } from "@/lib/supabase/realtime-utils";
+import { RECEIVABLE_ALREADY_RECEIVED_DELETE_MSG } from "@/lib/supabase/receivables";
 
 export function ReceivablesSheet() {
   const items = useReceivables();
@@ -64,7 +65,24 @@ export function ReceivablesSheet() {
   const handleToggleReceived = async (r: Receivable, received: boolean) => {
     try {
       await markReceivableReceived(r, received);
-      if (received) toast.success(`Recebimento registrado: ${r.name}`);
+      if (received) {
+        toast.success(`Recebimento registrado: ${r.name}`);
+      } else {
+        toast.success(`Recebimento desmarcado: ${r.name}`);
+      }
+    } catch (err) {
+      toast.error(supabaseErrorMessage(err));
+    }
+  };
+
+  const handleDelete = async (r: Receivable) => {
+    if (r.received) {
+      toast.error(RECEIVABLE_ALREADY_RECEIVED_DELETE_MSG);
+      return;
+    }
+    try {
+      await deleteReceivable(r.id);
+      toast.success("Recebível excluído");
     } catch (err) {
       toast.error(supabaseErrorMessage(err));
     }
@@ -168,14 +186,8 @@ export function ReceivablesSheet() {
                                   <Pencil className="h-4 w-4" />
                                 </button>
                                 <button
-                                  onClick={async () => {
-                                    try {
-                                      await deleteReceivable(r.id);
-                                      toast.success("Recebível excluído");
-                                    } catch (err) {
-                                      toast.error(supabaseErrorMessage(err));
-                                    }
-                                  }}
+                                  onClick={() => handleDelete(r)}
+                                  disabled={r.received}
                                   aria-label="Excluir"
                                   className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-destructive hover:bg-destructive/10"
                                 >

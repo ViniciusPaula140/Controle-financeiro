@@ -4,6 +4,7 @@ import { Eye, EyeOff, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useAuth } from "@/lib/supabase/auth-context";
 
 export const Route = createFileRoute("/login")({
   head: () => ({ meta: [{ title: "Entrar — Finanças" }] }),
@@ -12,6 +13,7 @@ export const Route = createFileRoute("/login")({
 
 function LoginPage() {
   const navigate = useNavigate();
+  const { signIn, signUp } = useAuth();
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -19,23 +21,48 @@ function LoginPage() {
   const [phone, setPhone] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setLoading(true);
+
     if (!email.includes("@")) {
       setError("Informe um e-mail válido.");
+      setLoading(false);
       return;
     }
-    if (password.length < 4) {
-      setError("A senha deve ter ao menos 4 caracteres.");
+    if (password.length < 6) {
+      setError("A senha deve ter ao menos 6 caracteres.");
+      setLoading(false);
       return;
     }
     if (mode === "signup" && phone.replace(/\D/g, "").length < 10) {
       setError("Informe um celular válido (DDD + número).");
+      setLoading(false);
       return;
     }
-    navigate({ to: "/" });
+
+    if (mode === "signup") {
+      const { error } = await signUp(email, password, phone);
+      if (error) {
+        setError(error.message);
+        setLoading(false);
+        return;
+      }
+      navigate({ to: "/" });
+    } else {
+      const { error } = await signIn(email, password);
+      if (error) {
+        setError(error.message);
+        setLoading(false);
+        return;
+      }
+      navigate({ to: "/" });
+    }
+
+    setLoading(false);
   };
 
   return (
@@ -137,8 +164,8 @@ function LoginPage() {
               </p>
             )}
 
-            <Button type="submit" size="lg" className="w-full">
-              {mode === "login" ? "Entrar" : "Criar conta"}
+            <Button type="submit" size="lg" className="w-full" disabled={loading}>
+              {loading ? "Processando..." : (mode === "login" ? "Entrar" : "Criar conta")}
             </Button>
           </form>
 

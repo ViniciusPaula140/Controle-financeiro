@@ -17,6 +17,7 @@ import {
   useTransactions,
   BRL,
 } from "@/lib/finance-store";
+import { useAuth } from "@/lib/supabase/auth-context";
 
 export function UserMenu() {
   const bills = useFixedBills();
@@ -25,6 +26,7 @@ export function UserMenu() {
   const transactions = useTransactions();
   const [alertOpen, setAlertOpen] = useState(false);
   const navigate = useNavigate();
+  const { signOut, user } = useAuth();
 
   const notifications = useMemo(() => {
     const items: { id: string; text: string; tone: "warn" | "danger" }[] = [];
@@ -74,7 +76,7 @@ export function UserMenu() {
         <DropdownMenuTrigger asChild>
           <button className="inline-flex items-center gap-2 rounded-full bg-accent px-3 py-1.5 text-sm font-medium text-accent-foreground transition active:scale-95">
             <User className="h-4 w-4" />
-            <span>Usuário</span>
+            <span>{user?.email?.split('@')[0] || 'Usuário'}</span>
             {notifications.length > 0 && (
               <span className="grid h-5 min-w-5 place-items-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
                 {notifications.length}
@@ -88,7 +90,11 @@ export function UserMenu() {
             <BellRing className="mr-2 h-4 w-4" /> Alertas de vencimento
           </DropdownMenuItem>
           <DropdownMenuItem
-            onSelect={(e) => { e.preventDefault(); navigate({ to: "/login" }); }}
+            onSelect={async (e) => {
+              e.preventDefault();
+              await signOut();
+              navigate({ to: "/login" });
+            }}
             className="text-destructive focus:text-destructive"
           >
             <LogOut className="mr-2 h-4 w-4" /> Sair

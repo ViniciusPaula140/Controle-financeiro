@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Plus, Trash2, Landmark } from "lucide-react";
 import { AppShell } from "@/components/finance/AppShell";
+import { ProtectedRoute } from "@/components/finance/ProtectedRoute";
 import {
   useAccountBalances,
   addAccountBalance,
@@ -38,13 +39,14 @@ function ContasPage() {
   const [creating, setCreating] = useState(false);
 
   return (
-    <AppShell
-      title="Contas"
-      action={
+    <ProtectedRoute>
+      <AppShell
+        title="Contas"
+        action={
         <button
           aria-label="Adicionar conta"
           onClick={() => setCreating(true)}
-          className="fixed bottom-24 left-[max(1.25rem,calc(50vw-13.5rem))] z-30 grid h-14 w-14 place-items-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30 transition-transform active:scale-95"
+          className="fixed bottom-4 left-4 z-30 grid h-14 w-14 place-items-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30 transition-transform active:scale-95 md:left-auto md:right-8 md:bottom-8"
         >
           <Plus className="h-6 w-6" />
         </button>
@@ -119,6 +121,7 @@ function ContasPage() {
         }
       />
     </AppShell>
+    </ProtectedRoute>
   );
 }
 

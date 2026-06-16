@@ -1,4 +1,10 @@
 import { useMemo, useSyncExternalStore } from "react";
+import { useTransactions as useSupabaseTransactions, addTransaction as addSupabaseTransaction, updateTransaction as updateSupabaseTransaction, deleteTransaction as deleteSupabaseTransaction } from "./supabase/transactions";
+import { useBudgets as useSupabaseBudgets, addBudget as addSupabaseBudget, updateBudget as updateSupabaseBudget, deleteBudget as deleteSupabaseBudget } from "./supabase/budgets";
+import { useAccountBalances as useSupabaseAccountBalances, addAccountBalance as addSupabaseAccountBalance, updateAccountBalance as updateSupabaseAccountBalance, deleteAccountBalance as deleteSupabaseAccountBalance } from "./supabase/account-balances";
+import { useGoals as useSupabaseGoals, addGoal as addSupabaseGoal, updateGoal as updateSupabaseGoal, deleteGoal as deleteSupabaseGoal } from "./supabase/goals";
+import { useFixedBills as useSupabaseFixedBills, addFixedBill as addSupabaseFixedBill, updateFixedBill as updateSupabaseFixedBill, deleteFixedBill as deleteSupabaseFixedBill, markFixedBillPaid as markSupabaseFixedBillPaid } from "./supabase/fixed-bills";
+import { useReceivables as useSupabaseReceivables, addReceivable as addSupabaseReceivable, updateReceivable as updateSupabaseReceivable, deleteReceivable as deleteSupabaseReceivable } from "./supabase/receivables";
 
 // Categories and accounts are dynamic strings so the user can create new ones.
 export type Category = string;
@@ -138,23 +144,21 @@ const budgetListeners = new Set<() => void>();
 const subBudget = (cb: () => void) => { budgetListeners.add(cb); return () => budgetListeners.delete(cb); };
 const emitBudget = () => budgetListeners.forEach((l) => l());
 export function useBudgets() {
-  return useSyncExternalStore(subBudget, () => budgetsList, () => budgetsList);
+  const { budgets } = useSupabaseBudgets();
+  return budgets;
 }
 export function addBudget(b: Omit<Budget, "id">) {
   const cat = b.category.trim();
   if (!cat) return;
   addCategory(cat);
-  budgetsList = [...budgetsList, { ...b, category: cat, id: `b${Date.now()}` }];
-  emitBudget();
+  addSupabaseBudget(b);
 }
 export function updateBudget(id: string, patch: Partial<Omit<Budget, "id">>) {
   if (patch.category) addCategory(patch.category);
-  budgetsList = budgetsList.map((b) => (b.id === id ? { ...b, ...patch } : b));
-  emitBudget();
+  updateSupabaseBudget(id, patch);
 }
 export function deleteBudget(id: string) {
-  budgetsList = budgetsList.filter((b) => b.id !== id);
-  emitBudget();
+  deleteSupabaseBudget(id);
 }
 /** @deprecated use useBudgets() */
 export const budgets = budgetsList;
@@ -187,23 +191,21 @@ const subTx = (cb: () => void) => {
 const emitTx = () => txListeners.forEach((l) => l());
 
 export function useTransactions() {
-  return useSyncExternalStore(subTx, () => transactions, () => transactions);
+  const { transactions } = useSupabaseTransactions();
+  return transactions;
 }
 export function addTransaction(t: Omit<Transaction, "id">) {
   if (t.category) addCategory(t.category);
   if (t.account) addAccountName(t.account);
-  transactions = [{ ...t, id: `t${Date.now()}${Math.random().toString(36).slice(2,5)}` }, ...transactions];
-  emitTx();
+  addSupabaseTransaction(t);
 }
 export function updateTransaction(id: string, patch: Partial<Omit<Transaction, "id">>) {
   if (patch.category) addCategory(patch.category);
   if (patch.account) addAccountName(patch.account);
-  transactions = transactions.map((t) => (t.id === id ? { ...t, ...patch } : t));
-  emitTx();
+  updateSupabaseTransaction(id, patch);
 }
 export function deleteTransaction(id: string) {
-  transactions = transactions.filter((t) => t.id !== id);
-  emitTx();
+  deleteSupabaseTransaction(id);
 }
 
 const accListeners = new Set<() => void>();
@@ -214,21 +216,19 @@ const subAcc = (cb: () => void) => {
 const emitAcc = () => accListeners.forEach((l) => l());
 
 export function useAccountBalances() {
-  return useSyncExternalStore(subAcc, () => accountBalances, () => accountBalances);
+  const { accounts } = useSupabaseAccountBalances();
+  return accounts;
 }
 export function addAccountBalance(a: Omit<AccountBalance, "id">) {
   if (a.account) addAccountName(a.account);
-  accountBalances = [...accountBalances, { ...a, id: `a${Date.now()}` }];
-  emitAcc();
+  addSupabaseAccountBalance(a);
 }
 export function updateAccountBalance(id: string, patch: Partial<Omit<AccountBalance, "id">>) {
   if (patch.account) addAccountName(patch.account);
-  accountBalances = accountBalances.map((a) => (a.id === id ? { ...a, ...patch } : a));
-  emitAcc();
+  updateSupabaseAccountBalance(id, patch);
 }
 export function deleteAccountBalance(id: string) {
-  accountBalances = accountBalances.filter((a) => a.id !== id);
-  emitAcc();
+  deleteSupabaseAccountBalance(id);
 }
 
 export { accountBalances };
@@ -244,49 +244,17 @@ const rcvListeners = new Set<() => void>();
 const subRcv = (cb: () => void) => { rcvListeners.add(cb); return () => rcvListeners.delete(cb); };
 const emitRcv = () => rcvListeners.forEach((l) => l());
 export function useReceivables() {
-  return useSyncExternalStore(subRcv, () => receivables, () => receivables);
+  const { receivables } = useSupabaseReceivables();
+  return receivables;
 }
 export function addReceivable(r: Omit<Receivable, "id">) {
-  receivables = [...receivables, { ...r, id: `r${Date.now()}` }];
-  emitRcv();
+  addSupabaseReceivable(r);
 }
 export function updateReceivable(id: string, patch: Partial<Omit<Receivable, "id">>) {
-  const before = receivables.find((r) => r.id === id);
-  if (!before) return;
-  const next: Receivable = { ...before, ...patch };
-  if (!before.received && patch.received === true) {
-    const txId = `t${Date.now()}${Math.random().toString(36).slice(2, 5)}`;
-    transactions = [
-      {
-        id: txId,
-        amount: before.amount,
-        type: "income",
-        category: "Outros",
-        account: "Nubank",
-        date: new Date().toISOString(),
-        description: before.name,
-        note: "Dinheiro recebido via Dinheiro a receber",
-      },
-      ...transactions,
-    ];
-    emitTx();
-    next.txId = txId;
-    next.receivedAt = next.receivedAt ?? new Date().toISOString();
-  }
-  if (before.received && patch.received === false) {
-    if (before.txId) {
-      transactions = transactions.filter((t) => t.id !== before.txId);
-      emitTx();
-    }
-    next.txId = undefined;
-    next.receivedAt = undefined;
-  }
-  receivables = receivables.map((r) => (r.id === id ? next : r));
-  emitRcv();
+  updateSupabaseReceivable(id, patch);
 }
 export function deleteReceivable(id: string) {
-  receivables = receivables.filter((r) => r.id !== id);
-  emitRcv();
+  deleteSupabaseReceivable(id);
 }
 
 // ---------- Goals ----------
@@ -297,19 +265,17 @@ const goalListeners = new Set<() => void>();
 const subGoal = (cb: () => void) => { goalListeners.add(cb); return () => goalListeners.delete(cb); };
 const emitGoal = () => goalListeners.forEach((l) => l());
 export function useGoals() {
-  return useSyncExternalStore(subGoal, () => goals, () => goals);
+  const { goals } = useSupabaseGoals();
+  return goals;
 }
 export function addGoal(g: Omit<Goal, "id">) {
-  goals = [...goals, { ...g, id: `g${Date.now()}` }];
-  emitGoal();
+  addSupabaseGoal(g);
 }
 export function updateGoal(id: string, patch: Partial<Omit<Goal, "id">>) {
-  goals = goals.map((g) => (g.id === id ? { ...g, ...patch } : g));
-  emitGoal();
+  updateSupabaseGoal(id, patch);
 }
 export function deleteGoal(id: string) {
-  goals = goals.filter((g) => g.id !== id);
-  emitGoal();
+  deleteSupabaseGoal(id);
 }
 
 // ---------- Fixed Bills ----------
@@ -339,25 +305,21 @@ const fbListeners = new Set<() => void>();
 const subFb = (cb: () => void) => { fbListeners.add(cb); return () => fbListeners.delete(cb); };
 const emitFb = () => fbListeners.forEach((l) => l());
 export function useFixedBills() {
-  return useSyncExternalStore(subFb, () => fixedBills, () => fixedBills);
+  const { bills } = useSupabaseFixedBills();
+  return bills;
 }
 export function addFixedBill(b: Omit<FixedBill, "id">) {
-  fixedBills = [...fixedBills, { ...b, id: `fb${Date.now()}${Math.random().toString(36).slice(2, 6)}` }];
-  emitFb();
+  addSupabaseFixedBill(b);
 }
 export function updateFixedBill(id: string, patch: Partial<Omit<FixedBill, "id">>) {
-  fixedBills = fixedBills.map((b) => (b.id === id ? { ...b, ...patch } : b));
-  emitFb();
+  updateSupabaseFixedBill(id, patch);
 }
 export function deleteFixedBill(id: string) {
-  fixedBills = fixedBills.filter((b) => b.id !== id);
-  emitFb();
+  deleteSupabaseFixedBill(id);
 }
 
 export function deleteFixedBills(ids: string[]) {
-  const set = new Set(ids);
-  fixedBills = fixedBills.filter((b) => !set.has(b.id));
-  emitFb();
+  ids.forEach(id => deleteSupabaseFixedBill(id));
 }
 
 /** Returns true if any bill exists for the given year+month. */
@@ -377,34 +339,32 @@ export function lastMonthWithBills(year: number, month: number): { year: number;
 }
 
 /** Copy items from a source month into target month (skips if target already has bills). */
-export function copyFixedBillsFromMonth(
+export async function copyFixedBillsFromMonth(
   src: { year: number; month: number },
   dst: { year: number; month: number },
 ) {
   if (fixedBillsExistInMonth(dst.year, dst.month)) return;
   const items = fixedBills.filter((b) => b.year === src.year && b.month === src.month);
-  const copies = items.map((b, i) => ({
-    ...b,
-    id: `fb${Date.now()}${i}`,
-    year: dst.year,
-    month: dst.month,
-    paid: false,
-    paidAt: undefined,
-  }));
-  fixedBills = [...fixedBills, ...copies];
-  emitFb();
+  for (const item of items) {
+    await addSupabaseFixedBill({
+      ...item,
+      year: dst.year,
+      month: dst.month,
+      paid: false,
+      paidAt: undefined,
+    });
+  }
 }
 
 /** Marks a bill paid (or unpaid). When paid, also creates a transaction. */
-export function markFixedBillPaid(id: string, paid: boolean) {
+export async function markFixedBillPaid(id: string, paid: boolean) {
   const bill = fixedBills.find((b) => b.id === id);
   if (!bill) return;
   const paidAt = paid ? new Date().toISOString() : undefined;
-  fixedBills = fixedBills.map((b) => (b.id === id ? { ...b, paid, paidAt } : b));
-  emitFb();
+  await markSupabaseFixedBillPaid(id, paid);
   if (paid) {
     const dateStr = new Date().toLocaleDateString("pt-BR");
-    addTransaction({
+    await addSupabaseTransaction({
       amount: bill.amount,
       type: "expense",
       category: "Outros",

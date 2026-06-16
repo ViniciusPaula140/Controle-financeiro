@@ -103,7 +103,7 @@ export function AddTransactionDialog({
           {trigger ?? (
             <button
               aria-label="Adicionar transação"
-              className="fixed right-5 bottom-24 z-30 grid h-14 w-14 place-items-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30 transition-transform active:scale-95 lg:right-8 lg:bottom-8"
+              className="fixed bottom-4 left-4 z-30 grid h-14 w-14 place-items-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30 transition-transform active:scale-95 md:left-auto md:right-8 md:bottom-8"
             >
               <Plus className="h-6 w-6" />
             </button>

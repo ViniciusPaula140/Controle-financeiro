@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Plus, Pencil, Trash2, Trophy } from "lucide-react";
 import { z } from "zod";
 import { AppShell } from "@/components/finance/AppShell";
+import { ProtectedRoute } from "@/components/finance/ProtectedRoute";
 import {
   useGoals,
   addGoal,
@@ -64,69 +65,70 @@ function MetasPage() {
   }, [goals]);
 
   return (
-    <AppShell
-      title="Metas"
-      action={
-        <button
-          aria-label="Nova meta"
-          onClick={() => { setEditing(null); setCreating(true); }}
-          className="fixed bottom-24 left-[max(1.25rem,calc(50vw-13.5rem))] z-30 grid h-14 w-14 place-items-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30 active:scale-95"
-        >
-          <Plus className="h-6 w-6" />
-        </button>
-      }
-    >
-      {grouped.size === 0 ? (
-        <p className="mt-10 text-center text-sm text-muted-foreground">
-          Nenhuma meta cadastrada.
-        </p>
-      ) : (
-        <div className="space-y-5">
-          {[...grouped.entries()].map(([year, list]) => (
-            <div key={year}>
-              <h3 className="mb-2 text-sm font-bold tracking-tight text-foreground">{year}</h3>
-              <ul className="space-y-2">
-                {list.map((g) => (
-                  <li key={g.id} className="flex items-center gap-3 rounded-2xl border border-border bg-card p-3">
-                    <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-accent text-primary">
-                      <Trophy className="h-5 w-5" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-foreground">{MONTH_NAMES[g.month]}</p>
-                      <p className="text-xs text-muted-foreground">{g.note ?? "Meta mensal"}</p>
-                    </div>
-                    <p className="shrink-0 text-sm font-semibold text-primary">{BRL(g.amount)}</p>
-                    <button onClick={() => setEditing(g)} aria-label="Editar" className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground hover:bg-accent">
-                      <Pencil className="h-4 w-4" />
-                    </button>
-                    <button onClick={() => deleteGoal(g.id)} aria-label="Excluir" className="grid h-8 w-8 place-items-center rounded-md text-destructive hover:bg-destructive/10">
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <GoalDialog
-        open={creating}
-        onOpenChange={(v) => { setCreating(v); if (!v) setEditing(null); }}
-        initial={editing && editing.id === "__new__" ? editing : undefined}
-        onSubmit={(d) => { addGoal(d); setCreating(false); setEditing(null); }}
-      />
-      <GoalDialog
-        key={editing?.id ?? "none-edit"}
-        open={!!editing && editing.id !== "__new__"}
-        onOpenChange={(v) => !v && setEditing(null)}
-        initial={editing && editing.id !== "__new__" ? editing : undefined}
-        onSubmit={(d) => {
-          if (editing && editing.id !== "__new__") updateGoal(editing.id, d);
-          setEditing(null);
-        }}
-      />
-    </AppShell>
+    <ProtectedRoute>
+      <AppShell
+        title="Metas"
+        action={
+          <button
+            aria-label="Nova meta"
+            onClick={() => { setEditing(null); setCreating(true); }}
+            className="fixed bottom-4 left-4 z-30 grid h-14 w-14 place-items-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30 transition-transform active:scale-95 md:left-auto md:right-8 md:bottom-8"
+          >
+            <Plus className="h-6 w-6" />
+          </button>
+        }
+      >
+        {grouped.size === 0 ? (
+          <p className="mt-10 text-center text-sm text-muted-foreground">
+            Nenhuma meta cadastrada.
+          </p>
+        ) : (
+          <div className="space-y-5">
+            {[...grouped.entries()].map(([year, list]) => (
+              <div key={year}>
+                <h3 className="mb-2 text-sm font-bold tracking-tight text-foreground">{year}</h3>
+                <ul className="space-y-2">
+                  {list.map((g) => (
+                    <li key={g.id} className="flex items-center gap-3 rounded-2xl border border-border bg-card p-3">
+                      <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-accent text-primary">
+                        <Trophy className="h-5 w-5" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-foreground">{MONTH_NAMES[g.month]}</p>
+                        <p className="text-xs text-muted-foreground">{g.note ?? "Meta mensal"}</p>
+                      </div>
+                      <p className="shrink-0 text-sm font-semibold text-primary">{BRL(g.amount)}</p>
+                      <button onClick={() => setEditing(g)} aria-label="Editar" className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground hover:bg-accent">
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                      <button onClick={() => deleteGoal(g.id)} aria-label="Excluir" className="grid h-8 w-8 place-items-center rounded-md text-destructive hover:bg-destructive/10">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        )}
+        <GoalDialog
+          open={creating}
+          onOpenChange={(v) => { setCreating(v); if (!v) setEditing(null); }}
+          initial={editing && editing.id === "__new__" ? editing : undefined}
+          onSubmit={(d) => { addGoal(d); setCreating(false); setEditing(null); }}
+        />
+        <GoalDialog
+          key={editing?.id ?? "none-edit"}
+          open={!!editing && editing.id !== "__new__"}
+          onOpenChange={(v) => !v && setEditing(null)}
+          initial={editing && editing.id !== "__new__" ? editing : undefined}
+          onSubmit={(d) => {
+            if (editing && editing.id !== "__new__") updateGoal(editing.id, d);
+            setEditing(null);
+          }}
+        />
+      </AppShell>
+    </ProtectedRoute>
   );
 }
 

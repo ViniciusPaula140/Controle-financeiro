@@ -2,6 +2,7 @@ import { supabase } from './supabaseClient';
 import { useAuth } from './auth-context';
 import { useEffect, useState } from 'react';
 import { mapGoalFromDb, mapGoalToDb } from './mappers';
+import { realtimeChannelName, requireRow } from './realtime-utils';
 
 export interface Goal {
   id: string;
@@ -60,8 +61,9 @@ export function useGoals() {
 
     fetchGoals();
 
+    const channelName = realtimeChannelName('metas', user.id);
     const channel = supabase
-      .channel('metas-changes')
+      .channel(channelName)
       .on(
         'postgres_changes',
         {
@@ -102,10 +104,10 @@ export async function addGoal(goal: Omit<Goal, 'id' | 'user_id'>) {
     .from('metas')
     .insert({ ...mapGoalToDb(goal), user_id: user.id })
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) throw error;
-  return mapGoalFromDb(data);
+  return mapGoalFromDb(requireRow(data, 'inserção de meta'));
 }
 
 export async function updateGoal(id: string, patch: Partial<Omit<Goal, 'id' | 'user_id'>>) {
@@ -116,10 +118,10 @@ export async function updateGoal(id: string, patch: Partial<Omit<Goal, 'id' | 'u
     .update(mapGoalToDb(patch))
     .eq('id', id)
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) throw error;
-  return mapGoalFromDb(data);
+  return mapGoalFromDb(requireRow(data, 'atualização de meta'));
 }
 
 export async function deleteGoal(id: string) {

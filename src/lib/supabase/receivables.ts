@@ -2,6 +2,7 @@ import { supabase } from './supabaseClient';
 import { useAuth } from './auth-context';
 import { useEffect, useState } from 'react';
 import { mapReceivableFromDb, mapReceivableToDb } from './mappers';
+import { realtimeChannelName, requireRow } from './realtime-utils';
 
 export interface Receivable {
   id: string;
@@ -63,8 +64,9 @@ export function useReceivables() {
 
     fetchReceivables();
 
+    const channelName = realtimeChannelName('dinheiro_receber', user.id);
     const channel = supabase
-      .channel('dinheiro_receber-changes')
+      .channel(channelName)
       .on(
         'postgres_changes',
         {
@@ -105,10 +107,10 @@ export async function addReceivable(receivable: Omit<Receivable, 'id' | 'user_id
     .from('dinheiro_receber')
     .insert({ ...mapReceivableToDb(receivable), user_id: user.id })
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) throw error;
-  return mapReceivableFromDb(data);
+  return mapReceivableFromDb(requireRow(data, 'inserção de recebível'));
 }
 
 export async function updateReceivable(id: string, patch: Partial<Omit<Receivable, 'id' | 'user_id'>>) {
@@ -119,10 +121,10 @@ export async function updateReceivable(id: string, patch: Partial<Omit<Receivabl
     .update(mapReceivableToDb(patch))
     .eq('id', id)
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) throw error;
-  return mapReceivableFromDb(data);
+  return mapReceivableFromDb(requireRow(data, 'atualização de recebível'));
 }
 
 export async function deleteReceivable(id: string) {

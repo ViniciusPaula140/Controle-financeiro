@@ -2,6 +2,7 @@ import { supabase } from './supabaseClient';
 import { useAuth } from './auth-context';
 import { useEffect, useState } from 'react';
 import { mapFixedBillFromDb, mapFixedBillToDb } from './mappers';
+import { realtimeChannelName, requireRow } from './realtime-utils';
 
 export interface FixedBill {
   id: string;
@@ -65,8 +66,9 @@ export function useFixedBills() {
 
     fetchBills();
 
+    const channelName = realtimeChannelName('contas_fixas', user.id);
     const channel = supabase
-      .channel('contas_fixas-changes')
+      .channel(channelName)
       .on(
         'postgres_changes',
         {
@@ -107,10 +109,10 @@ export async function addFixedBill(bill: Omit<FixedBill, 'id' | 'user_id'>) {
     .from('contas_fixas')
     .insert({ ...mapFixedBillToDb(bill), user_id: user.id })
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) throw error;
-  return mapFixedBillFromDb(data);
+  return mapFixedBillFromDb(requireRow(data, 'inserção de conta fixa'));
 }
 
 export async function updateFixedBill(id: string, patch: Partial<Omit<FixedBill, 'id' | 'user_id'>>) {
@@ -121,10 +123,10 @@ export async function updateFixedBill(id: string, patch: Partial<Omit<FixedBill,
     .update(mapFixedBillToDb(patch))
     .eq('id', id)
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) throw error;
-  return mapFixedBillFromDb(data);
+  return mapFixedBillFromDb(requireRow(data, 'atualização de conta fixa'));
 }
 
 export async function deleteFixedBill(id: string) {

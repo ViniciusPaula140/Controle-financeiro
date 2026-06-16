@@ -2,6 +2,7 @@ import { supabase } from './supabaseClient';
 import { useAuth } from './auth-context';
 import { useEffect, useState } from 'react';
 import { mapTransactionFromDb, mapTransactionToDb } from './mappers';
+import { realtimeChannelName, requireRow } from './realtime-utils';
 
 export interface Transaction {
   id: string;
@@ -63,8 +64,7 @@ export function useTransactions() {
 
     fetchTransactions();
 
-    // Apague o Date.now() e coloque Math.random()
-const channelName = `transacoes-changes-${user.id}-${Math.random()}`;
+    const channelName = realtimeChannelName('transacoes', user.id);
     const channel = supabase
       .channel(channelName)
       .on(
@@ -113,10 +113,10 @@ export async function addTransaction(transaction: Omit<Transaction, 'id' | 'user
     .from('transacoes')
     .insert({ ...mapTransactionToDb(transaction), user_id: user.id })
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) throw error;
-  return mapTransactionFromDb(data);
+  return mapTransactionFromDb(requireRow(data, 'inserção de transação'));
 }
 
 export async function updateTransaction(id: string, patch: Partial<Omit<Transaction, 'id' | 'user_id'>>) {
@@ -127,10 +127,10 @@ export async function updateTransaction(id: string, patch: Partial<Omit<Transact
     .update(mapTransactionToDb(patch))
     .eq('id', id)
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) throw error;
-  return mapTransactionFromDb(data);
+  return mapTransactionFromDb(requireRow(data, 'atualização de transação'));
 }
 
 export async function deleteTransaction(id: string) {

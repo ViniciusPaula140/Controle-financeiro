@@ -145,7 +145,7 @@ const subBudget = (cb: () => void) => { budgetListeners.add(cb); return () => bu
 const emitBudget = () => budgetListeners.forEach((l) => l());
 export function useBudgets() {
   const { budgets } = useSupabaseBudgets();
-  return budgets;
+  return budgets ?? [];
 }
 export function addBudget(b: Omit<Budget, "id">) {
   const cat = b.category.trim();
@@ -192,7 +192,7 @@ const emitTx = () => txListeners.forEach((l) => l());
 
 export function useTransactions() {
   const { transactions, loading, error } = useSupabaseTransactions();
-  return transactions;
+  return transactions ?? [];
 }
 export function useTransactionsState() {
   return useSupabaseTransactions();
@@ -220,7 +220,7 @@ const emitAcc = () => accListeners.forEach((l) => l());
 
 export function useAccountBalances() {
   const { accounts } = useSupabaseAccountBalances();
-  return accounts;
+  return accounts ?? [];
 }
 export function addAccountBalance(a: Omit<AccountBalance, "id">) {
   if (a.account) addAccountName(a.account);
@@ -248,7 +248,7 @@ const subRcv = (cb: () => void) => { rcvListeners.add(cb); return () => rcvListe
 const emitRcv = () => rcvListeners.forEach((l) => l());
 export function useReceivables() {
   const { receivables } = useSupabaseReceivables();
-  return receivables;
+  return receivables ?? [];
 }
 export function addReceivable(r: Omit<Receivable, "id">) {
   addSupabaseReceivable(r);
@@ -269,7 +269,7 @@ const subGoal = (cb: () => void) => { goalListeners.add(cb); return () => goalLi
 const emitGoal = () => goalListeners.forEach((l) => l());
 export function useGoals() {
   const { goals } = useSupabaseGoals();
-  return goals;
+  return goals ?? [];
 }
 export function addGoal(g: Omit<Goal, "id">) {
   addSupabaseGoal(g);
@@ -309,7 +309,7 @@ const subFb = (cb: () => void) => { fbListeners.add(cb); return () => fbListener
 const emitFb = () => fbListeners.forEach((l) => l());
 export function useFixedBills() {
   const { bills } = useSupabaseFixedBills();
-  return bills;
+  return bills ?? [];
 }
 export function addFixedBill(b: Omit<FixedBill, "id">) {
   addSupabaseFixedBill(b);

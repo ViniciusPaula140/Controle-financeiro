@@ -2,6 +2,7 @@ import { supabase } from './supabaseClient';
 import { useAuth } from './auth-context';
 import { useEffect, useState } from 'react';
 import { mapAccountFromDb, mapAccountToDb } from './mappers';
+import { realtimeChannelName, requireRow } from './realtime-utils';
 
 export interface AccountBalance {
   id: string;
@@ -57,8 +58,9 @@ export function useAccountBalances() {
 
     fetchAccounts();
 
+    const channelName = realtimeChannelName('contas_bancarias', user.id);
     const channel = supabase
-      .channel('contas_bancarias-changes')
+      .channel(channelName)
       .on(
         'postgres_changes',
         {
@@ -99,10 +101,10 @@ export async function addAccountBalance(account: Omit<AccountBalance, 'id' | 'us
     .from('contas_bancarias')
     .insert({ ...mapAccountToDb(account), user_id: user.id })
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) throw error;
-  return mapAccountFromDb(data);
+  return mapAccountFromDb(requireRow(data, 'inserção de conta bancária'));
 }
 
 export async function updateAccountBalance(id: string, patch: Partial<Omit<AccountBalance, 'id' | 'user_id'>>) {
@@ -113,10 +115,10 @@ export async function updateAccountBalance(id: string, patch: Partial<Omit<Accou
     .update(mapAccountToDb(patch))
     .eq('id', id)
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) throw error;
-  return mapAccountFromDb(data);
+  return mapAccountFromDb(requireRow(data, 'atualização de conta bancária'));
 }
 
 export async function deleteAccountBalance(id: string) {

@@ -2,6 +2,7 @@ import { supabase } from './supabaseClient';
 import { useAuth } from './auth-context';
 import { useEffect, useState } from 'react';
 import { mapBudgetFromDb, mapBudgetToDb } from './mappers';
+import { realtimeChannelName, requireRow } from './realtime-utils';
 
 export interface Budget {
   id: string;
@@ -57,8 +58,9 @@ export function useBudgets() {
 
     fetchBudgets();
 
+    const channelName = realtimeChannelName('orcamentos', user.id);
     const channel = supabase
-      .channel('orcamentos-changes')
+      .channel(channelName)
       .on(
         'postgres_changes',
         {
@@ -99,10 +101,10 @@ export async function addBudget(budget: Omit<Budget, 'id' | 'user_id'>) {
     .from('orcamentos')
     .insert({ ...mapBudgetToDb(budget), user_id: user.id })
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) throw error;
-  return mapBudgetFromDb(data);
+  return mapBudgetFromDb(requireRow(data, 'inserção de orçamento'));
 }
 
 export async function updateBudget(id: string, patch: Partial<Omit<Budget, 'id' | 'user_id'>>) {
@@ -113,10 +115,10 @@ export async function updateBudget(id: string, patch: Partial<Omit<Budget, 'id' 
     .update(mapBudgetToDb(patch))
     .eq('id', id)
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) throw error;
-  return mapBudgetFromDb(data);
+  return mapBudgetFromDb(requireRow(data, 'atualização de orçamento'));
 }
 
 export async function deleteBudget(id: string) {

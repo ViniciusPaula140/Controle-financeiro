@@ -5,7 +5,6 @@ import { toast } from "sonner";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as ReTooltip } from "recharts";
 import { AppShell } from "@/components/finance/AppShell";
 import { AddTransactionDialog } from "@/components/finance/AddTransactionDialog";
-import { ProtectedRoute } from "@/components/finance/ProtectedRoute";
 import {
   useTransactions,
   useAccountBalances,
@@ -117,8 +116,7 @@ function Index() {
   const byCategoryTotal = byCategory.reduce((s, c) => s + c.value, 0);
 
   return (
-    <ProtectedRoute>
-      <AppShell title="Início" action={<AddTransactionDialog />}>
+    <AppShell title="Início" action={<AddTransactionDialog />}>
       <div className="mb-5 flex flex-col gap-3 rounded-2xl border border-border bg-card p-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
         <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Período</span>
         <div className="flex flex-wrap items-center gap-2">
@@ -254,6 +252,5 @@ function Index() {
         </section>
       </div>
     </AppShell>
-    </ProtectedRoute>
   );
 }

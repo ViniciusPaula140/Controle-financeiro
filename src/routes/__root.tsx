@@ -12,7 +12,7 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Toaster } from "@/components/ui/sonner";
-import { AuthProvider } from "@/lib/supabase/auth-context";
+import { AuthProvider, useAuth } from "@/lib/supabase/auth-context";
 
 function NotFoundComponent() {
   return (
@@ -125,10 +125,38 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-        <Outlet />
+        <RouteGuard />
         <Toaster position="top-right" closeButton richColors />
       </AuthProvider>
     </QueryClientProvider>
   );
+}
+
+function RouteGuard() {
+  const { user, loading } = useAuth();
+  const router = useRouter();
+  const location = router.state.location;
+
+  useEffect(() => {
+    if (!loading && !user) {
+      const currentPath = location.pathname;
+      // Allow access to login and registro pages without authentication
+      if (currentPath !== "/login" && currentPath !== "/registro") {
+        router.navigate({ to: "/login", replace: true });
+      }
+    }
+  }, [user, loading, location, router]);
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto" />
+          <p className="mt-4 text-sm text-muted-foreground">Carregando...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return <Outlet />;
 }

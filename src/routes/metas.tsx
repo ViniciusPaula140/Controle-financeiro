@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState } from "react";
 import { Plus, Pencil, Trash2, Trophy } from "lucide-react";
 import { z } from "zod";
 import { AppShell } from "@/components/finance/AppShell";
-import { ProtectedRoute } from "@/components/finance/ProtectedRoute";
 import {
   useGoals,
   addGoal,
@@ -65,19 +64,18 @@ function MetasPage() {
   }, [goals]);
 
   return (
-    <ProtectedRoute>
-      <AppShell
-        title="Metas"
-        action={
-          <button
-            aria-label="Nova meta"
-            onClick={() => { setEditing(null); setCreating(true); }}
-            className="fixed bottom-4 left-4 z-30 grid h-14 w-14 place-items-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30 transition-transform active:scale-95 md:left-auto md:right-8 md:bottom-8"
-          >
-            <Plus className="h-6 w-6" />
-          </button>
-        }
-      >
+    <AppShell
+      title="Metas"
+      action={
+        <button
+          aria-label="Nova meta"
+          onClick={() => { setEditing(null); setCreating(true); }}
+          className="fixed bottom-4 left-4 z-30 grid h-14 w-14 place-items-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30 transition-transform active:scale-95 md:left-auto md:right-8 md:bottom-8"
+        >
+          <Plus className="h-6 w-6" />
+        </button>
+      }
+    >
         {grouped.size === 0 ? (
           <p className="mt-10 text-center text-sm text-muted-foreground">
             Nenhuma meta cadastrada.
@@ -128,7 +126,6 @@ function MetasPage() {
           }}
         />
       </AppShell>
-    </ProtectedRoute>
   );
 }
 

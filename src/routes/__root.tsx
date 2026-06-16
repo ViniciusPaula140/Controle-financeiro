@@ -137,17 +137,21 @@ function RouteGuard() {
   const router = useRouter();
   const location = router.state.location;
 
-  useEffect(() => {
-    if (!loading && !user) {
-      const currentPath = location.pathname;
-      // Allow access to login and registro pages without authentication
-      if (currentPath !== "/login" && currentPath !== "/registro") {
-        router.navigate({ to: "/login", replace: true });
-      }
-    }
-  }, [user, loading, location, router]);
+  const currentPath = location.pathname;
+  const isPublicRoute = currentPath === "/login" || currentPath === "/registro";
 
-  if (loading) {
+  console.log('[RouteGuard] Estado atual:', { loading, user, currentPath, isPublicRoute });
+
+  useEffect(() => {
+    if (!loading && !user && !isPublicRoute) {
+      console.log('[RouteGuard] Usuário não autenticado em rota privada, redirecionando para /login');
+      router.navigate({ to: "/login", replace: true });
+    }
+  }, [user, loading, location, router, isPublicRoute]);
+
+  // Não mostrar spinner para rotas públicas - permitir renderização imediata
+  if (loading && !isPublicRoute) {
+    console.log('[RouteGuard] Mostrando spinner de carregamento para rota privada');
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
@@ -158,5 +162,6 @@ function RouteGuard() {
     );
   }
 
+  console.log('[RouteGuard] Renderizando Outlet');
   return <Outlet />;
 }

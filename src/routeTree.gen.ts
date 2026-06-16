@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as TransacoesRouteImport } from './routes/transacoes'
+import { Route as RegistroRouteImport } from './routes/registro'
 import { Route as OrcamentosRouteImport } from './routes/orcamentos'
 import { Route as MetasRouteImport } from './routes/metas'
 import { Route as LoginRouteImport } from './routes/login'
@@ -20,6 +21,11 @@ import { Route as IndexRouteImport } from './routes/index'
 const TransacoesRoute = TransacoesRouteImport.update({
   id: '/transacoes',
   path: '/transacoes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RegistroRoute = RegistroRouteImport.update({
+  id: '/registro',
+  path: '/registro',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OrcamentosRoute = OrcamentosRouteImport.update({
@@ -60,6 +66,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/metas': typeof MetasRoute
   '/orcamentos': typeof OrcamentosRoute
+  '/registro': typeof RegistroRoute
   '/transacoes': typeof TransacoesRoute
 }
 export interface FileRoutesByTo {
@@ -69,6 +76,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/metas': typeof MetasRoute
   '/orcamentos': typeof OrcamentosRoute
+  '/registro': typeof RegistroRoute
   '/transacoes': typeof TransacoesRoute
 }
 export interface FileRoutesById {
@@ -79,6 +87,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/metas': typeof MetasRoute
   '/orcamentos': typeof OrcamentosRoute
+  '/registro': typeof RegistroRoute
   '/transacoes': typeof TransacoesRoute
 }
 export interface FileRouteTypes {
@@ -90,6 +99,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/metas'
     | '/orcamentos'
+    | '/registro'
     | '/transacoes'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -99,6 +109,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/metas'
     | '/orcamentos'
+    | '/registro'
     | '/transacoes'
   id:
     | '__root__'
@@ -108,6 +119,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/metas'
     | '/orcamentos'
+    | '/registro'
     | '/transacoes'
   fileRoutesById: FileRoutesById
 }
@@ -118,6 +130,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   MetasRoute: typeof MetasRoute
   OrcamentosRoute: typeof OrcamentosRoute
+  RegistroRoute: typeof RegistroRoute
   TransacoesRoute: typeof TransacoesRoute
 }
 
@@ -128,6 +141,13 @@ declare module '@tanstack/react-router' {
       path: '/transacoes'
       fullPath: '/transacoes'
       preLoaderRoute: typeof TransacoesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/registro': {
+      id: '/registro'
+      path: '/registro'
+      fullPath: '/registro'
+      preLoaderRoute: typeof RegistroRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/orcamentos': {
@@ -182,6 +202,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   MetasRoute: MetasRoute,
   OrcamentosRoute: OrcamentosRoute,
+  RegistroRoute: RegistroRoute,
   TransacoesRoute: TransacoesRoute,
 }
 export const routeTree = rootRouteImport

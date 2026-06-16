@@ -7,6 +7,10 @@
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
 export default defineConfig({
+  // Adicione este bloco para avisar que o build será para servidor Node
+  nitro: { 
+    preset: "node-server" 
+  },
   vite: {
     server: {
       port: 8080,
@@ -14,8 +18,6 @@ export default defineConfig({
     },
   },
   tanstackStart: {
-    // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
-    // nitro/vite builds from this
     server: { entry: "server" },
   },
 });

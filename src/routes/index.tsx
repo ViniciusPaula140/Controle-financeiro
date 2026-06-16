@@ -117,10 +117,11 @@ function Index() {
 
   return (
     <AppShell title="Início" action={<AddTransactionDialog />}>
-      <div className="mb-5 flex flex-wrap items-center gap-2 rounded-2xl border border-border bg-card p-3">
+      <div className="mb-5 flex flex-col gap-3 rounded-2xl border border-border bg-card p-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
         <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Período</span>
+        <div className="flex flex-wrap items-center gap-2">
         <Select value={monthFilter} onValueChange={setMonthFilter}>
-          <SelectTrigger className="h-9 w-[140px]"><SelectValue placeholder="Mês" /></SelectTrigger>
+          <SelectTrigger className="h-9 w-full min-w-[140px] sm:w-[140px]"><SelectValue placeholder="Mês" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos os meses</SelectItem>
             {MONTH_NAMES.map((n, i) => (
@@ -129,7 +130,7 @@ function Index() {
           </SelectContent>
         </Select>
         <Select value={yearFilter} onValueChange={setYearFilter}>
-          <SelectTrigger className="h-9 w-[120px]"><SelectValue placeholder="Ano" /></SelectTrigger>
+          <SelectTrigger className="h-9 w-full min-w-[120px] sm:w-[120px]"><SelectValue placeholder="Ano" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos os anos</SelectItem>
             {yearOptions.map((y) => (
@@ -145,30 +146,31 @@ function Index() {
         >
           <X className="h-3.5 w-3.5" /> Limpar filtros
         </Button>
+        </div>
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-3">
-        <section className="rounded-3xl bg-gradient-to-br from-primary to-emerald-600 p-5 text-primary-foreground shadow-lg shadow-primary/20">
+      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+        <section className="rounded-3xl bg-gradient-to-br from-primary to-emerald-600 p-5 text-primary-foreground shadow-lg shadow-primary/20 md:col-span-2 xl:col-span-1">
           <p className="text-xs font-medium uppercase tracking-wider opacity-80">Investimento em contas</p>
-          <p className="mt-2 text-3xl font-bold tracking-tight">{BRL(accountsTotal)}</p>
+          <p className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">{BRL(accountsTotal)}</p>
           <p className="mt-2 text-xs opacity-80">
             {accounts.length} {accounts.length === 1 ? "conta" : "contas"} cadastradas
           </p>
           <p className="mt-3 text-[10px] uppercase opacity-70">Valor global — não filtrado</p>
         </section>
 
-        <section className="grid grid-cols-2 gap-3 lg:col-span-2">
+        <section className="grid grid-cols-2 gap-3 md:col-span-2 xl:col-span-2">
           <div className="rounded-2xl border border-border bg-card p-4">
             <p className="text-xs text-muted-foreground">Receitas ({periodLabel})</p>
-            <p className="mt-1 text-lg font-semibold text-primary">{BRL(income)}</p>
+            <p className="mt-1 text-base font-semibold text-primary sm:text-lg">{BRL(income)}</p>
           </div>
           <div className="rounded-2xl border border-border bg-card p-4">
             <p className="text-xs text-muted-foreground">Despesas ({periodLabel})</p>
-            <p className="mt-1 text-lg font-semibold text-destructive">{BRL(expenses)}</p>
+            <p className="mt-1 text-base font-semibold text-destructive sm:text-lg">{BRL(expenses)}</p>
           </div>
           <div className="col-span-2 rounded-2xl border border-border bg-card p-4">
             <p className="text-xs text-muted-foreground">Saldo do período</p>
-            <p className={`mt-1 text-xl font-bold ${income - expenses >= 0 ? "text-primary" : "text-destructive"}`}>
+            <p className={`mt-1 text-lg font-bold sm:text-xl ${income - expenses >= 0 ? "text-primary" : "text-destructive"}`}>
               {BRL(income - expenses)}
             </p>
           </div>
@@ -177,15 +179,13 @@ function Index() {
 
       <div className="mt-5 grid gap-5 lg:grid-cols-2">
         <section className="rounded-2xl border border-border bg-card p-4">
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2">
-              <div className="grid h-9 w-9 place-items-center rounded-xl bg-accent text-primary">
+              <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-accent text-primary">
                 <Trophy className="h-4 w-4" />
               </div>
               <div>
-          <p className="text-xs text-muted-foreground">
-                  Meta ({periodLabel})
-                </p>
+                <p className="text-xs text-muted-foreground">Meta ({periodLabel})</p>
                 <p className="text-base font-semibold text-foreground">
                   {totalGoal > 0 ? BRL(totalGoal) : "Sem meta definida"}
                 </p>
@@ -194,7 +194,7 @@ function Index() {
             <Link
               to="/metas"
               search={{ ym: editGoalYM }}
-              className="inline-flex items-center gap-1 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-accent"
+              className="inline-flex w-fit items-center gap-1 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground transition hover:bg-accent"
             >
               <Pencil className="h-3.5 w-3.5" /> Editar Meta
             </Link>
@@ -219,9 +219,9 @@ function Index() {
               Sem despesas neste período.
             </p>
           ) : (
-            <div className="mt-3 flex items-center gap-3">
-              <div className="h-40 w-40 shrink-0">
-                <ResponsiveContainer>
+            <div className="mt-3 flex flex-col items-center gap-4 sm:flex-row sm:items-center sm:gap-6">
+              <div className="h-36 w-36 shrink-0 sm:h-40 sm:w-40">
+                <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie data={byCategory} dataKey="value" innerRadius={42} outerRadius={70} paddingAngle={2} stroke="none">
                       {byCategory.map((c) => (

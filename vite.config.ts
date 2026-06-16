@@ -1,20 +1,19 @@
 import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
-import { TanStackRouterVite } from '@tanstack/router-plugin/vite';
+import { tanstackStart } from '@tanstack/react-start/plugin/vite';
+import { nitro } from 'nitro/vite';
+import viteReact from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
+import tsconfigPaths from 'vite-tsconfig-paths';
 
 export default defineConfig({
   plugins: [
-    react(),
-    TanStackRouterVite(),
+    tanstackStart(),
+    nitro({ preset: 'node-server' }),
+    viteReact(),
     tailwindcss(),
+    tsconfigPaths(),
   ],
   server: {
     port: 8080,
-  },
-  // O Render precisa disso para entender que é um app Node.js (SSR)
-  // Caso o build continue falhando, adicione o preset 'node-server' abaixo:
-  build: {
-    outDir: 'dist',
   },
 });

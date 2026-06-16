@@ -20,28 +20,46 @@ export function useFixedBills() {
   const { user } = useAuth();
   const [bills, setBills] = useState<FixedBill[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
     if (!user) {
       setBills([]);
       setLoading(false);
+      setError(null);
+      return;
+    }
+
+    if (!supabase) {
+      console.error('Supabase client is not configured');
+      setBills([]);
+      setLoading(false);
+      setError(new Error('Supabase client is not configured'));
       return;
     }
 
     const fetchBills = async () => {
-      const { data, error } = await supabase
-        .from('contas_fixas')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('year', { ascending: false })
-        .order('month', { ascending: false });
+      try {
+        const { data, error } = await supabase
+          .from('contas_fixas')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('year', { ascending: false })
+          .order('month', { ascending: false });
 
-      if (error) {
-        console.error('Error fetching fixed bills:', error);
-      } else {
-        setBills(data || []);
+        if (error) {
+          console.error('Error fetching fixed bills:', error);
+          setError(error);
+        } else {
+          setBills(data || []);
+          setError(null);
+        }
+      } catch (err) {
+        console.error('Unexpected error fetching fixed bills:', err);
+        setError(err as Error);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
 
     fetchBills();
@@ -75,10 +93,12 @@ export function useFixedBills() {
     };
   }, [user]);
 
-  return { bills, loading };
+  return { bills, loading, error };
 }
 
 export async function addFixedBill(bill: Omit<FixedBill, 'id' | 'user_id'>) {
+  if (!supabase) throw new Error('Supabase client is not configured');
+
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('User not authenticated');
 
@@ -93,6 +113,8 @@ export async function addFixedBill(bill: Omit<FixedBill, 'id' | 'user_id'>) {
 }
 
 export async function updateFixedBill(id: string, patch: Partial<Omit<FixedBill, 'id' | 'user_id'>>) {
+  if (!supabase) throw new Error('Supabase client is not configured');
+
   const { data, error } = await supabase
     .from('contas_fixas')
     .update(patch)
@@ -105,11 +127,15 @@ export async function updateFixedBill(id: string, patch: Partial<Omit<FixedBill,
 }
 
 export async function deleteFixedBill(id: string) {
+  if (!supabase) throw new Error('Supabase client is not configured');
+
   const { error } = await supabase.from('contas_fixas').delete().eq('id', id);
   if (error) throw error;
 }
 
 export async function markFixedBillPaid(id: string, paid: boolean) {
+  if (!supabase) throw new Error('Supabase client is not configured');
+
   const { error } = await supabase
     .from('contas_fixas')
     .update({ paid, paidAt: paid ? new Date().toISOString() : null })

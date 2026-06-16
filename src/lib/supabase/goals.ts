@@ -15,28 +15,46 @@ export function useGoals() {
   const { user } = useAuth();
   const [goals, setGoals] = useState<Goal[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
     if (!user) {
       setGoals([]);
       setLoading(false);
+      setError(null);
+      return;
+    }
+
+    if (!supabase) {
+      console.error('Supabase client is not configured');
+      setGoals([]);
+      setLoading(false);
+      setError(new Error('Supabase client is not configured'));
       return;
     }
 
     const fetchGoals = async () => {
-      const { data, error } = await supabase
-        .from('metas')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('year', { ascending: false })
-        .order('month', { ascending: false });
+      try {
+        const { data, error } = await supabase
+          .from('metas')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('year', { ascending: false })
+          .order('month', { ascending: false });
 
-      if (error) {
-        console.error('Error fetching goals:', error);
-      } else {
-        setGoals(data || []);
+        if (error) {
+          console.error('Error fetching goals:', error);
+          setError(error);
+        } else {
+          setGoals(data || []);
+          setError(null);
+        }
+      } catch (err) {
+        console.error('Unexpected error fetching goals:', err);
+        setError(err as Error);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
 
     fetchGoals();
@@ -70,10 +88,12 @@ export function useGoals() {
     };
   }, [user]);
 
-  return { goals, loading };
+  return { goals, loading, error };
 }
 
 export async function addGoal(goal: Omit<Goal, 'id' | 'user_id'>) {
+  if (!supabase) throw new Error('Supabase client is not configured');
+
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('User not authenticated');
 
@@ -88,6 +108,8 @@ export async function addGoal(goal: Omit<Goal, 'id' | 'user_id'>) {
 }
 
 export async function updateGoal(id: string, patch: Partial<Omit<Goal, 'id' | 'user_id'>>) {
+  if (!supabase) throw new Error('Supabase client is not configured');
+
   const { data, error } = await supabase
     .from('metas')
     .update(patch)
@@ -100,6 +122,8 @@ export async function updateGoal(id: string, patch: Partial<Omit<Goal, 'id' | 'u
 }
 
 export async function deleteGoal(id: string) {
+  if (!supabase) throw new Error('Supabase client is not configured');
+
   const { error } = await supabase.from('metas').delete().eq('id', id);
   if (error) throw error;
 }

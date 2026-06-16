@@ -63,7 +63,8 @@ export function useTransactions() {
 
     fetchTransactions();
 
-    const channelName = `transacoes-changes-${user.id}`;
+    // Apague o Date.now() e coloque Math.random()
+const channelName = `transacoes-changes-${user.id}-${Math.random()}`;
     const channel = supabase
       .channel(channelName)
       .on(

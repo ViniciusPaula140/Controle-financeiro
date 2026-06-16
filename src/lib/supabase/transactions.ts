@@ -1,6 +1,7 @@
 import { supabase } from './supabaseClient';
 import { useAuth } from './auth-context';
 import { useEffect, useState } from 'react';
+import { mapTransactionFromDb, mapTransactionToDb } from './mappers';
 
 export interface Transaction {
   id: string;
@@ -43,13 +44,13 @@ export function useTransactions() {
           .from('transacoes')
           .select('*')
           .eq('user_id', user.id)
-          .order('date', { ascending: false });
+          .order('data', { ascending: false });
 
         if (error) {
           console.error('Error fetching transactions:', error);
           setError(error);
         } else {
-          setTransactions(data || []);
+          setTransactions((data ?? []).map(mapTransactionFromDb));
           setError(null);
         }
       } catch (err) {
@@ -74,10 +75,10 @@ export function useTransactions() {
         },
         (payload) => {
           if (payload.eventType === 'INSERT') {
-            setTransactions((prev) => [payload.new as Transaction, ...prev]);
+            setTransactions((prev) => [mapTransactionFromDb(payload.new), ...prev]);
           } else if (payload.eventType === 'UPDATE') {
             setTransactions((prev) =>
-              prev.map((t) => (t.id === payload.new.id ? (payload.new as Transaction) : t))
+              prev.map((t) => (t.id === payload.new.id ? mapTransactionFromDb(payload.new) : t))
             );
           } else if (payload.eventType === 'DELETE') {
             setTransactions((prev) => prev.filter((t) => t.id !== payload.old.id));
@@ -102,12 +103,12 @@ export async function addTransaction(transaction: Omit<Transaction, 'id' | 'user
 
   const { data, error } = await supabase
     .from('transacoes')
-    .insert({ ...transaction, user_id: user.id })
+    .insert({ ...mapTransactionToDb(transaction), user_id: user.id })
     .select()
     .single();
 
   if (error) throw error;
-  return data;
+  return mapTransactionFromDb(data);
 }
 
 export async function updateTransaction(id: string, patch: Partial<Omit<Transaction, 'id' | 'user_id'>>) {
@@ -115,13 +116,13 @@ export async function updateTransaction(id: string, patch: Partial<Omit<Transact
 
   const { data, error } = await supabase
     .from('transacoes')
-    .update(patch)
+    .update(mapTransactionToDb(patch))
     .eq('id', id)
     .select()
     .single();
 
   if (error) throw error;
-  return data;
+  return mapTransactionFromDb(data);
 }
 
 export async function deleteTransaction(id: string) {

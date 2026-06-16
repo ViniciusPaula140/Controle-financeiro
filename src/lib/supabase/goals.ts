@@ -1,6 +1,7 @@
 import { supabase } from './supabaseClient';
 import { useAuth } from './auth-context';
 import { useEffect, useState } from 'react';
+import { mapGoalFromDb, mapGoalToDb } from './mappers';
 
 export interface Goal {
   id: string;
@@ -39,14 +40,14 @@ export function useGoals() {
           .from('metas')
           .select('*')
           .eq('user_id', user.id)
-          .order('year', { ascending: false })
-          .order('month', { ascending: false });
+          .order('ano', { ascending: false })
+          .order('mes', { ascending: false });
 
         if (error) {
           console.error('Error fetching goals:', error);
           setError(error);
         } else {
-          setGoals(data || []);
+          setGoals((data ?? []).map(mapGoalFromDb));
           setError(null);
         }
       } catch (err) {
@@ -71,10 +72,10 @@ export function useGoals() {
         },
         (payload) => {
           if (payload.eventType === 'INSERT') {
-            setGoals((prev) => [...prev, payload.new as Goal]);
+            setGoals((prev) => [...prev, mapGoalFromDb(payload.new)]);
           } else if (payload.eventType === 'UPDATE') {
             setGoals((prev) =>
-              prev.map((g) => (g.id === payload.new.id ? (payload.new as Goal) : g))
+              prev.map((g) => (g.id === payload.new.id ? mapGoalFromDb(payload.new) : g))
             );
           } else if (payload.eventType === 'DELETE') {
             setGoals((prev) => prev.filter((g) => g.id !== payload.old.id));
@@ -99,12 +100,12 @@ export async function addGoal(goal: Omit<Goal, 'id' | 'user_id'>) {
 
   const { data, error } = await supabase
     .from('metas')
-    .insert({ ...goal, user_id: user.id })
+    .insert({ ...mapGoalToDb(goal), user_id: user.id })
     .select()
     .single();
 
   if (error) throw error;
-  return data;
+  return mapGoalFromDb(data);
 }
 
 export async function updateGoal(id: string, patch: Partial<Omit<Goal, 'id' | 'user_id'>>) {
@@ -112,13 +113,13 @@ export async function updateGoal(id: string, patch: Partial<Omit<Goal, 'id' | 'u
 
   const { data, error } = await supabase
     .from('metas')
-    .update(patch)
+    .update(mapGoalToDb(patch))
     .eq('id', id)
     .select()
     .single();
 
   if (error) throw error;
-  return data;
+  return mapGoalFromDb(data);
 }
 
 export async function deleteGoal(id: string) {

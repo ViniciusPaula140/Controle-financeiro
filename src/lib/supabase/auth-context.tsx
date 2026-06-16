@@ -19,53 +19,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    console.log('[AuthContext] Inicializando AuthProvider');
-    
-    // Timeout de segurança para garantir que loading nunca fique travado
-    const timeoutId = setTimeout(() => {
-      console.warn('[AuthContext] Timeout de segurança atingido - forçando loading = false');
-      setLoading(false);
-    }, 5000); // 5 segundos de timeout
-    
-    // Check if supabase is configured
     if (!supabase) {
       console.error('[AuthContext] Supabase client is not configured. Please check your environment variables.');
       setLoading(false);
-      clearTimeout(timeoutId);
       return;
     }
 
-    // Get initial session
-    console.log('[AuthContext] Buscando sessão inicial...');
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log('[AuthContext] Sessão obtida:', session);
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-      clearTimeout(timeoutId);
-      console.log('[AuthContext] Loading definido como false após getSession');
-    }).catch((error) => {
-      console.error('[AuthContext] Error getting session:', error);
-      setLoading(false);
-      clearTimeout(timeoutId);
-      console.log('[AuthContext] Loading definido como false após erro');
-    });
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        setSession(session);
+        setUser(session?.user ?? null);
+      })
+      .catch((error) => {
+        console.error('[AuthContext] Error getting session:', error);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
 
-    // Listen for auth changes
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      console.log('[AuthContext] Auth state changed:', _event, session);
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
-      clearTimeout(timeoutId);
-      console.log('[AuthContext] Loading definido como false após onAuthStateChange');
     });
 
     return () => {
       subscription.unsubscribe();
-      clearTimeout(timeoutId);
     };
   }, []);
 

@@ -1,6 +1,7 @@
 import { supabase } from './supabaseClient';
 import { useAuth } from './auth-context';
 import { useEffect, useState } from 'react';
+import { mapFixedBillFromDb, mapFixedBillToDb } from './mappers';
 
 export interface FixedBill {
   id: string;
@@ -44,14 +45,14 @@ export function useFixedBills() {
           .from('contas_fixas')
           .select('*')
           .eq('user_id', user.id)
-          .order('year', { ascending: false })
-          .order('month', { ascending: false });
+          .order('ano', { ascending: false })
+          .order('mes', { ascending: false });
 
         if (error) {
           console.error('Error fetching fixed bills:', error);
           setError(error);
         } else {
-          setBills(data || []);
+          setBills((data ?? []).map(mapFixedBillFromDb));
           setError(null);
         }
       } catch (err) {
@@ -76,10 +77,10 @@ export function useFixedBills() {
         },
         (payload) => {
           if (payload.eventType === 'INSERT') {
-            setBills((prev) => [...prev, payload.new as FixedBill]);
+            setBills((prev) => [...prev, mapFixedBillFromDb(payload.new)]);
           } else if (payload.eventType === 'UPDATE') {
             setBills((prev) =>
-              prev.map((b) => (b.id === payload.new.id ? (payload.new as FixedBill) : b))
+              prev.map((b) => (b.id === payload.new.id ? mapFixedBillFromDb(payload.new) : b))
             );
           } else if (payload.eventType === 'DELETE') {
             setBills((prev) => prev.filter((b) => b.id !== payload.old.id));
@@ -104,12 +105,12 @@ export async function addFixedBill(bill: Omit<FixedBill, 'id' | 'user_id'>) {
 
   const { data, error } = await supabase
     .from('contas_fixas')
-    .insert({ ...bill, user_id: user.id })
+    .insert({ ...mapFixedBillToDb(bill), user_id: user.id })
     .select()
     .single();
 
   if (error) throw error;
-  return data;
+  return mapFixedBillFromDb(data);
 }
 
 export async function updateFixedBill(id: string, patch: Partial<Omit<FixedBill, 'id' | 'user_id'>>) {
@@ -117,13 +118,13 @@ export async function updateFixedBill(id: string, patch: Partial<Omit<FixedBill,
 
   const { data, error } = await supabase
     .from('contas_fixas')
-    .update(patch)
+    .update(mapFixedBillToDb(patch))
     .eq('id', id)
     .select()
     .single();
 
   if (error) throw error;
-  return data;
+  return mapFixedBillFromDb(data);
 }
 
 export async function deleteFixedBill(id: string) {
@@ -138,7 +139,10 @@ export async function markFixedBillPaid(id: string, paid: boolean) {
 
   const { error } = await supabase
     .from('contas_fixas')
-    .update({ paid, paidAt: paid ? new Date().toISOString() : null })
+    .update({
+      status_pago: paid,
+      pago_em: paid ? new Date().toISOString() : null,
+    })
     .eq('id', id);
 
   if (error) throw error;

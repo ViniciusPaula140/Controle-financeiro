@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 
 export const NAV_ITEMS = [
-  { to: "/", label: "Início", shortLabel: "Início", icon: Home },
+  { to: "/inicio", label: "Início", shortLabel: "Início", icon: Home },
   { to: "/transacoes", label: "Transações", shortLabel: "Transac.", icon: ArrowLeftRight },
   { to: "/orcamentos", label: "Orçamentos", shortLabel: "Orçam.", icon: Target },
   { to: "/investimentos", label: "Contas", shortLabel: "Contas", icon: Landmark },

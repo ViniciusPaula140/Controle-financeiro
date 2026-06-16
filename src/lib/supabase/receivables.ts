@@ -1,6 +1,7 @@
 import { supabase } from './supabaseClient';
 import { useAuth } from './auth-context';
 import { useEffect, useState } from 'react';
+import { mapReceivableFromDb, mapReceivableToDb } from './mappers';
 
 export interface Receivable {
   id: string;
@@ -39,17 +40,17 @@ export function useReceivables() {
     const fetchReceivables = async () => {
       try {
         const { data, error } = await supabase
-          .from('dinheiro_a_receber')
+          .from('dinheiro_receber')
           .select('*')
           .eq('user_id', user.id)
-          .order('year', { ascending: false })
-          .order('month', { ascending: false });
+          .order('ano', { ascending: false })
+          .order('mes', { ascending: false });
 
         if (error) {
           console.error('Error fetching receivables:', error);
           setError(error);
         } else {
-          setReceivables(data || []);
+          setReceivables((data ?? []).map(mapReceivableFromDb));
           setError(null);
         }
       } catch (err) {
@@ -63,21 +64,21 @@ export function useReceivables() {
     fetchReceivables();
 
     const channel = supabase
-      .channel('dinheiro_a_receber-changes')
+      .channel('dinheiro_receber-changes')
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
-          table: 'dinheiro_a_receber',
+          table: 'dinheiro_receber',
           filter: `user_id=eq.${user.id}`,
         },
         (payload) => {
           if (payload.eventType === 'INSERT') {
-            setReceivables((prev) => [...prev, payload.new as Receivable]);
+            setReceivables((prev) => [...prev, mapReceivableFromDb(payload.new)]);
           } else if (payload.eventType === 'UPDATE') {
             setReceivables((prev) =>
-              prev.map((r) => (r.id === payload.new.id ? (payload.new as Receivable) : r))
+              prev.map((r) => (r.id === payload.new.id ? mapReceivableFromDb(payload.new) : r))
             );
           } else if (payload.eventType === 'DELETE') {
             setReceivables((prev) => prev.filter((r) => r.id !== payload.old.id));
@@ -101,32 +102,32 @@ export async function addReceivable(receivable: Omit<Receivable, 'id' | 'user_id
   if (!user) throw new Error('User not authenticated');
 
   const { data, error } = await supabase
-    .from('dinheiro_a_receber')
-    .insert({ ...receivable, user_id: user.id })
+    .from('dinheiro_receber')
+    .insert({ ...mapReceivableToDb(receivable), user_id: user.id })
     .select()
     .single();
 
   if (error) throw error;
-  return data;
+  return mapReceivableFromDb(data);
 }
 
 export async function updateReceivable(id: string, patch: Partial<Omit<Receivable, 'id' | 'user_id'>>) {
   if (!supabase) throw new Error('Supabase client is not configured');
 
   const { data, error } = await supabase
-    .from('dinheiro_a_receber')
-    .update(patch)
+    .from('dinheiro_receber')
+    .update(mapReceivableToDb(patch))
     .eq('id', id)
     .select()
     .single();
 
   if (error) throw error;
-  return data;
+  return mapReceivableFromDb(data);
 }
 
 export async function deleteReceivable(id: string) {
   if (!supabase) throw new Error('Supabase client is not configured');
 
-  const { error } = await supabase.from('dinheiro_a_receber').delete().eq('id', id);
+  const { error } = await supabase.from('dinheiro_receber').delete().eq('id', id);
   if (error) throw error;
 }

@@ -20,40 +20,41 @@ function RegisterPage() {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [showPw, setShowPw] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
     setLoading(true);
 
     if (!email.includes("@")) {
-      setError("Informe um e-mail válido.");
+      toast.error("Informe um e-mail válido.");
       setLoading(false);
       return;
     }
     if (password.length < 6) {
-      setError("A senha deve ter ao menos 6 caracteres.");
+      toast.error("A senha deve ter ao menos 6 caracteres.");
       setLoading(false);
       return;
     }
     if (phone.replace(/\D/g, "").length < 10) {
-      setError("Informe um celular válido (DDD + número).");
+      toast.error("Informe um celular válido (DDD + número).");
       setLoading(false);
       return;
     }
 
-    const { error } = await signUp(email, password, phone);
-    if (error) {
-      setError(error.message);
+    try {
+      const { error } = await signUp(email, password, phone);
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      toast.success("Conta criada com sucesso!");
+      navigate({ to: "/login" });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao criar conta.");
+    } finally {
       setLoading(false);
-      return;
     }
-
-    toast.success("Conta criada com sucesso! Verifique seu e-mail.");
-    navigate({ to: "/login" });
-    setLoading(false);
   };
 
   return (
@@ -124,20 +125,16 @@ function RegisterPage() {
                 />
                 <button
                   type="button"
+                  onMouseDown={(e) => e.preventDefault()}
                   onClick={() => setShowPw((v) => !v)}
                   aria-label={showPw ? "Ocultar senha" : "Mostrar senha"}
+                  aria-pressed={showPw}
                   className="absolute inset-y-0 right-0 grid w-10 place-items-center text-muted-foreground"
                 >
                   {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
             </div>
-
-            {error && (
-              <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                {error}
-              </p>
-            )}
 
             <Button type="submit" size="lg" className="w-full" disabled={loading}>
               {loading ? "Processando..." : "Criar conta"}

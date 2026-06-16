@@ -1,6 +1,7 @@
 import { supabase } from './supabaseClient';
 import { useAuth } from './auth-context';
 import { useEffect, useState } from 'react';
+import { mapBudgetFromDb, mapBudgetToDb } from './mappers';
 
 export interface Budget {
   id: string;
@@ -43,7 +44,7 @@ export function useBudgets() {
           console.error('Error fetching budgets:', error);
           setError(error);
         } else {
-          setBudgets(data || []);
+          setBudgets((data ?? []).map(mapBudgetFromDb));
           setError(null);
         }
       } catch (err) {
@@ -68,10 +69,10 @@ export function useBudgets() {
         },
         (payload) => {
           if (payload.eventType === 'INSERT') {
-            setBudgets((prev) => [...prev, payload.new as Budget]);
+            setBudgets((prev) => [...prev, mapBudgetFromDb(payload.new)]);
           } else if (payload.eventType === 'UPDATE') {
             setBudgets((prev) =>
-              prev.map((b) => (b.id === payload.new.id ? (payload.new as Budget) : b))
+              prev.map((b) => (b.id === payload.new.id ? mapBudgetFromDb(payload.new) : b))
             );
           } else if (payload.eventType === 'DELETE') {
             setBudgets((prev) => prev.filter((b) => b.id !== payload.old.id));
@@ -96,12 +97,12 @@ export async function addBudget(budget: Omit<Budget, 'id' | 'user_id'>) {
 
   const { data, error } = await supabase
     .from('orcamentos')
-    .insert({ ...budget, user_id: user.id })
+    .insert({ ...mapBudgetToDb(budget), user_id: user.id })
     .select()
     .single();
 
   if (error) throw error;
-  return data;
+  return mapBudgetFromDb(data);
 }
 
 export async function updateBudget(id: string, patch: Partial<Omit<Budget, 'id' | 'user_id'>>) {
@@ -109,13 +110,13 @@ export async function updateBudget(id: string, patch: Partial<Omit<Budget, 'id' 
 
   const { data, error } = await supabase
     .from('orcamentos')
-    .update(patch)
+    .update(mapBudgetToDb(patch))
     .eq('id', id)
     .select()
     .single();
 
   if (error) throw error;
-  return data;
+  return mapBudgetFromDb(data);
 }
 
 export async function deleteBudget(id: string) {

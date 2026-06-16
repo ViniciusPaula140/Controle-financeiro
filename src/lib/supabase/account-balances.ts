@@ -1,6 +1,7 @@
 import { supabase } from './supabaseClient';
 import { useAuth } from './auth-context';
 import { useEffect, useState } from 'react';
+import { mapAccountFromDb, mapAccountToDb } from './mappers';
 
 export interface AccountBalance {
   id: string;
@@ -35,7 +36,7 @@ export function useAccountBalances() {
     const fetchAccounts = async () => {
       try {
         const { data, error } = await supabase
-          .from('contas')
+          .from('contas_bancarias')
           .select('*')
           .eq('user_id', user.id);
 
@@ -43,7 +44,7 @@ export function useAccountBalances() {
           console.error('Error fetching account balances:', error);
           setError(error);
         } else {
-          setAccounts(data || []);
+          setAccounts((data ?? []).map(mapAccountFromDb));
           setError(null);
         }
       } catch (err) {
@@ -57,21 +58,21 @@ export function useAccountBalances() {
     fetchAccounts();
 
     const channel = supabase
-      .channel('contas-changes')
+      .channel('contas_bancarias-changes')
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
-          table: 'contas',
+          table: 'contas_bancarias',
           filter: `user_id=eq.${user.id}`,
         },
         (payload) => {
           if (payload.eventType === 'INSERT') {
-            setAccounts((prev) => [...prev, payload.new as AccountBalance]);
+            setAccounts((prev) => [...prev, mapAccountFromDb(payload.new)]);
           } else if (payload.eventType === 'UPDATE') {
             setAccounts((prev) =>
-              prev.map((a) => (a.id === payload.new.id ? (payload.new as AccountBalance) : a))
+              prev.map((a) => (a.id === payload.new.id ? mapAccountFromDb(payload.new) : a))
             );
           } else if (payload.eventType === 'DELETE') {
             setAccounts((prev) => prev.filter((a) => a.id !== payload.old.id));
@@ -95,32 +96,32 @@ export async function addAccountBalance(account: Omit<AccountBalance, 'id' | 'us
   if (!user) throw new Error('User not authenticated');
 
   const { data, error } = await supabase
-    .from('contas')
-    .insert({ ...account, user_id: user.id })
+    .from('contas_bancarias')
+    .insert({ ...mapAccountToDb(account), user_id: user.id })
     .select()
     .single();
 
   if (error) throw error;
-  return data;
+  return mapAccountFromDb(data);
 }
 
 export async function updateAccountBalance(id: string, patch: Partial<Omit<AccountBalance, 'id' | 'user_id'>>) {
   if (!supabase) throw new Error('Supabase client is not configured');
 
   const { data, error } = await supabase
-    .from('contas')
-    .update(patch)
+    .from('contas_bancarias')
+    .update(mapAccountToDb(patch))
     .eq('id', id)
     .select()
     .single();
 
   if (error) throw error;
-  return data;
+  return mapAccountFromDb(data);
 }
 
 export async function deleteAccountBalance(id: string) {
   if (!supabase) throw new Error('Supabase client is not configured');
 
-  const { error } = await supabase.from('contas').delete().eq('id', id);
+  const { error } = await supabase.from('contas_bancarias').delete().eq('id', id);
   if (error) throw error;
 }

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { User, BellRing, AlertCircle, Calendar, LogOut } from "lucide-react";
+import { toast } from "sonner";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -93,7 +94,8 @@ export function UserMenu() {
             onSelect={async (e) => {
               e.preventDefault();
               await signOut();
-              navigate({ to: "/login" });
+              toast.success("Você saiu da conta.");
+              navigate({ to: "/login", replace: true });
             }}
             className="text-destructive focus:text-destructive"
           >

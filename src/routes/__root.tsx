@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   Outlet,
   Link,
+  Navigate,
   createRootRouteWithContext,
   useRouter,
   HeadContent,
@@ -25,7 +26,7 @@ function NotFoundComponent() {
         </p>
         <div className="mt-6">
           <Link
-            to="/"
+            to="/inicio"
             className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
           >
             Go home
@@ -63,7 +64,7 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
             Try again
           </button>
           <a
-            href="/"
+            href="/inicio"
             className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
           >
             Go home
@@ -135,23 +136,13 @@ function RootComponent() {
 function RouteGuard() {
   const { user, loading } = useAuth();
   const router = useRouter();
-  const location = router.state.location;
+  const currentPath = router.state.location.pathname;
 
-  const currentPath = location.pathname;
   const isPublicRoute = currentPath === "/login" || currentPath === "/registro";
+  const isGuestOnlyRoute =
+    currentPath === "/login" || currentPath === "/registro" || currentPath === "/";
 
-  console.log('[RouteGuard] Estado atual:', { loading, user, currentPath, isPublicRoute });
-
-  useEffect(() => {
-    if (!loading && !user && !isPublicRoute) {
-      console.log('[RouteGuard] Usuário não autenticado em rota privada, redirecionando para /login');
-      router.navigate({ to: "/login", replace: true });
-    }
-  }, [user, loading, location, router, isPublicRoute]);
-
-  // Não mostrar spinner para rotas públicas - permitir renderização imediata
   if (loading && !isPublicRoute) {
-    console.log('[RouteGuard] Mostrando spinner de carregamento para rota privada');
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
@@ -162,6 +153,13 @@ function RouteGuard() {
     );
   }
 
-  console.log('[RouteGuard] Renderizando Outlet');
+  if (!loading && !user && !isPublicRoute) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (!loading && user && isGuestOnlyRoute) {
+    return <Navigate to="/inicio" replace />;
+  }
+
   return <Outlet />;
 }

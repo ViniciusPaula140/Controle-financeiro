@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { Eye, EyeOff, Wallet } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,56 +14,40 @@ export const Route = createFileRoute("/login")({
 
 function LoginPage() {
   const navigate = useNavigate();
-  const { signIn, signUp } = useAuth();
-  const [mode, setMode] = useState<"login" | "signup">("login");
+  const { signIn } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
   const [showPw, setShowPw] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
     setLoading(true);
 
     if (!email.includes("@")) {
-      setError("Informe um e-mail válido.");
+      toast.error("Informe um e-mail válido.");
       setLoading(false);
       return;
     }
     if (password.length < 6) {
-      setError("A senha deve ter ao menos 6 caracteres.");
-      setLoading(false);
-      return;
-    }
-    if (mode === "signup" && phone.replace(/\D/g, "").length < 10) {
-      setError("Informe um celular válido (DDD + número).");
+      toast.error("A senha deve ter ao menos 6 caracteres.");
       setLoading(false);
       return;
     }
 
-    if (mode === "signup") {
-      const { error } = await signUp(email, password, phone);
-      if (error) {
-        setError(error.message);
-        setLoading(false);
-        return;
-      }
-      navigate({ to: "/" });
-    } else {
+    try {
       const { error } = await signIn(email, password);
       if (error) {
-        setError(error.message);
-        setLoading(false);
+        toast.error(error.message);
         return;
       }
-      navigate({ to: "/" });
+      toast.success("Login efetuado!");
+      navigate({ to: "/inicio" });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao entrar.");
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   return (
@@ -74,29 +59,14 @@ function LoginPage() {
               <Wallet className="h-7 w-7" />
             </div>
             <h1 className="mt-4 text-2xl font-bold tracking-tight text-foreground">
-              {mode === "login" ? "Bem-vindo de volta" : "Crie sua conta"}
+              Bem-vindo de volta
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              {mode === "login"
-                ? "Acesse para gerenciar suas finanças."
-                : "Comece a organizar seu dinheiro hoje."}
+              Acesse para gerenciar suas finanças.
             </p>
           </div>
 
           <form onSubmit={submit} className="space-y-4">
-            {mode === "signup" && (
-              <div className="space-y-1.5">
-                <Label htmlFor="name">Nome</Label>
-                <Input
-                  id="name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Como podemos te chamar?"
-                  autoComplete="name"
-                />
-              </div>
-            )}
-
             <div className="space-y-1.5">
               <Label htmlFor="email">E-mail</Label>
               <Input
@@ -110,32 +80,15 @@ function LoginPage() {
               />
             </div>
 
-            {mode === "signup" && (
-              <div className="space-y-1.5">
-                <Label htmlFor="phone">Celular</Label>
-                <Input
-                  id="phone"
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="(11) 90000-0000"
-                  autoComplete="tel"
-                  inputMode="tel"
-                />
-              </div>
-            )}
-
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <Label htmlFor="password">Senha</Label>
-                {mode === "login" && (
-                  <button
-                    type="button"
-                    className="text-xs font-medium text-primary hover:underline"
-                  >
-                    Esqueci minha senha
-                  </button>
-                )}
+                <button
+                  type="button"
+                  className="text-xs font-medium text-primary hover:underline"
+                >
+                  Esqueci minha senha
+                </button>
               </div>
               <div className="relative">
                 <Input
@@ -144,13 +97,15 @@ function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  autoComplete={mode === "login" ? "current-password" : "new-password"}
+                  autoComplete="current-password"
                   className="pr-10"
                 />
                 <button
                   type="button"
+                  onMouseDown={(e) => e.preventDefault()}
                   onClick={() => setShowPw((v) => !v)}
                   aria-label={showPw ? "Ocultar senha" : "Mostrar senha"}
+                  aria-pressed={showPw}
                   className="absolute inset-y-0 right-0 grid w-10 place-items-center text-muted-foreground"
                 >
                   {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -158,14 +113,8 @@ function LoginPage() {
               </div>
             </div>
 
-            {error && (
-              <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                {error}
-              </p>
-            )}
-
             <Button type="submit" size="lg" className="w-full" disabled={loading}>
-              {loading ? "Processando..." : (mode === "login" ? "Entrar" : "Criar conta")}
+              {loading ? "Processando..." : "Entrar"}
             </Button>
           </form>
 
@@ -176,10 +125,10 @@ function LoginPage() {
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <Button type="button" variant="outline" size="lg" onClick={() => navigate({ to: "/" })}>
+            <Button type="button" variant="outline" size="lg" onClick={() => navigate({ to: "/inicio" })}>
               Google
             </Button>
-            <Button type="button" variant="outline" size="lg" onClick={() => navigate({ to: "/" })}>
+            <Button type="button" variant="outline" size="lg" onClick={() => navigate({ to: "/inicio" })}>
               Apple
             </Button>
           </div>

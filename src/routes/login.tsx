@@ -118,21 +118,6 @@ function LoginPage() {
             </Button>
           </form>
 
-          <div className="my-6 flex items-center gap-3 text-xs text-muted-foreground">
-            <div className="h-px flex-1 bg-border" />
-            ou continue com
-            <div className="h-px flex-1 bg-border" />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <Button type="button" variant="outline" size="lg" onClick={() => navigate({ to: "/inicio" })}>
-              Google
-            </Button>
-            <Button type="button" variant="outline" size="lg" onClick={() => navigate({ to: "/inicio" })}>
-              Apple
-            </Button>
-          </div>
-
           <p className="mt-8 text-center text-sm text-muted-foreground">
             Ainda não tem conta?{" "}
             <button

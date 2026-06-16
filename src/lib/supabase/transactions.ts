@@ -77,7 +77,10 @@ export function useTransactions() {
         },
         (payload) => {
           if (payload.eventType === 'INSERT') {
-            setTransactions((prev) => [mapTransactionFromDb(payload.new), ...prev]);
+            const mapped = mapTransactionFromDb(payload.new);
+            setTransactions((prev) =>
+              prev.some((t) => t.id === mapped.id) ? prev : [mapped, ...prev],
+            );
           } else if (payload.eventType === 'UPDATE') {
             setTransactions((prev) =>
               prev.map((t) => (t.id === payload.new.id ? mapTransactionFromDb(payload.new) : t))
@@ -98,7 +101,7 @@ export function useTransactions() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user]);
+  }, [user?.id]);
 
   return { transactions, loading, error };
 }

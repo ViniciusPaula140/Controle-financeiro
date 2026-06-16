@@ -200,7 +200,7 @@ export function useTransactionsState() {
 export function addTransaction(t: Omit<Transaction, "id">) {
   if (t.category) addCategory(t.category);
   if (t.account) addAccountName(t.account);
-  addSupabaseTransaction(t);
+  return addSupabaseTransaction(t);
 }
 export function updateTransaction(id: string, patch: Partial<Omit<Transaction, "id">>) {
   if (patch.category) addCategory(patch.category);
@@ -250,14 +250,51 @@ export function useReceivables() {
   const { receivables } = useSupabaseReceivables();
   return receivables ?? [];
 }
-export function addReceivable(r: Omit<Receivable, "id">) {
-  addSupabaseReceivable(r);
+export async function addReceivable(r: Omit<Receivable, "id">) {
+  const created = await addSupabaseReceivable({
+    ...r,
+    received: false,
+    receivedAt: undefined,
+    txId: undefined,
+  });
+  if (r.received) {
+    await markReceivableReceived(created, true);
+  }
+  return created;
 }
-export function updateReceivable(id: string, patch: Partial<Omit<Receivable, "id">>) {
-  updateSupabaseReceivable(id, patch);
+
+export async function updateReceivable(id: string, patch: Partial<Omit<Receivable, "id">>) {
+  return updateSupabaseReceivable(id, patch);
 }
-export function deleteReceivable(id: string) {
-  deleteSupabaseReceivable(id);
+
+export async function markReceivableReceived(receivable: Receivable, received: boolean) {
+  if (!received) {
+    return updateSupabaseReceivable(receivable.id, {
+      received: false,
+      receivedAt: undefined,
+    });
+  }
+  if (receivable.received && receivable.txId) return receivable;
+
+  const receivedAt = new Date().toISOString();
+  const tx = await addSupabaseTransaction({
+    amount: receivable.amount,
+    type: "income",
+    category: "Outros",
+    account: "Nubank",
+    date: receivedAt,
+    description: receivable.name,
+    note: 'Dinheiro recebido via "Dinheiro a receber"',
+  });
+  return updateSupabaseReceivable(receivable.id, {
+    received: true,
+    receivedAt,
+    txId: tx.id,
+  });
+}
+
+export async function deleteReceivable(id: string) {
+  return deleteSupabaseReceivable(id);
 }
 
 // ---------- Goals ----------
@@ -311,28 +348,34 @@ export function useFixedBills() {
   const { bills } = useSupabaseFixedBills();
   return bills ?? [];
 }
-export function addFixedBill(b: Omit<FixedBill, "id">) {
-  addSupabaseFixedBill(b);
+export async function addFixedBill(b: Omit<FixedBill, "id">) {
+  return addSupabaseFixedBill(b);
 }
-export function updateFixedBill(id: string, patch: Partial<Omit<FixedBill, "id">>) {
-  updateSupabaseFixedBill(id, patch);
+export async function updateFixedBill(id: string, patch: Partial<Omit<FixedBill, "id">>) {
+  return updateSupabaseFixedBill(id, patch);
 }
-export function deleteFixedBill(id: string) {
-  deleteSupabaseFixedBill(id);
-}
-
-export function deleteFixedBills(ids: string[]) {
-  ids.forEach(id => deleteSupabaseFixedBill(id));
+export async function deleteFixedBill(id: string) {
+  return deleteSupabaseFixedBill(id);
 }
 
-/** Returns true if any bill exists for the given year+month. */
-export function fixedBillsExistInMonth(year: number, month: number): boolean {
-  return fixedBills.some((b) => b.year === year && b.month === month);
+export async function deleteFixedBills(ids: string[]) {
+  await Promise.all(ids.map((id) => deleteSupabaseFixedBill(id)));
+}
+
+/** Returns true if any bill exists for the given year+month (uses live Supabase data). */
+export function fixedBillsExistInMonth(bills: FixedBill[], year: number, month: number): boolean {
+  if (!bills.length) return false;
+  return bills.some((b) => b.year === year && b.month === month);
 }
 
 /** Returns the most recent (year, month) before the given one that has bills. */
-export function lastMonthWithBills(year: number, month: number): { year: number; month: number } | null {
-  const candidates = fixedBills
+export function lastMonthWithBills(
+  bills: FixedBill[],
+  year: number,
+  month: number,
+): { year: number; month: number } | null {
+  if (!bills.length) return null;
+  const candidates = bills
     .filter((b) => b.year < year || (b.year === year && b.month < month))
     .map((b) => b.year * 12 + b.month)
     .sort((a, b) => b - a);
@@ -343,11 +386,12 @@ export function lastMonthWithBills(year: number, month: number): { year: number;
 
 /** Copy items from a source month into target month (skips if target already has bills). */
 export async function copyFixedBillsFromMonth(
+  bills: FixedBill[],
   src: { year: number; month: number },
   dst: { year: number; month: number },
 ) {
-  if (fixedBillsExistInMonth(dst.year, dst.month)) return;
-  const items = fixedBills.filter((b) => b.year === src.year && b.month === src.month);
+  if (fixedBillsExistInMonth(bills, dst.year, dst.month)) return;
+  const items = bills.filter((b) => b.year === src.year && b.month === src.month);
   for (const item of items) {
     await addSupabaseFixedBill({
       ...item,
@@ -360,12 +404,9 @@ export async function copyFixedBillsFromMonth(
 }
 
 /** Marks a bill paid (or unpaid). When paid, also creates a transaction. */
-export async function markFixedBillPaid(id: string, paid: boolean) {
-  const bill = fixedBills.find((b) => b.id === id);
-  if (!bill) return;
-  const paidAt = paid ? new Date().toISOString() : undefined;
-  await markSupabaseFixedBillPaid(id, paid);
-  if (paid) {
+export async function markFixedBillPaid(bill: FixedBill, paid: boolean) {
+  await markSupabaseFixedBillPaid(bill.id, paid);
+  if (paid && !bill.paid) {
     const dateStr = new Date().toLocaleDateString("pt-BR");
     await addSupabaseTransaction({
       amount: bill.amount,

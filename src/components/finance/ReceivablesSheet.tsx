@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Plus, Pencil, Trash2, Inbox } from "lucide-react";
+import { toast } from "sonner";
 import {
   Sheet,
   SheetContent,
@@ -29,11 +30,13 @@ import {
   useReceivables,
   addReceivable,
   updateReceivable,
+  markReceivableReceived,
   deleteReceivable,
   BRL,
   MONTH_NAMES,
   type Receivable,
 } from "@/lib/finance-store";
+import { supabaseErrorMessage } from "@/lib/supabase/realtime-utils";
 
 export function ReceivablesSheet() {
   const items = useReceivables();
@@ -53,7 +56,19 @@ export function ReceivablesSheet() {
     return map;
   }, [items]);
 
-  const totalPending = items.filter((r) => !r.received).reduce((s, r) => s + r.amount, 0);
+  const totalPending = useMemo(
+    () => items.filter((r) => !r.received).reduce((s, r) => s + (r.amount ?? 0), 0),
+    [items],
+  );
+
+  const handleToggleReceived = async (r: Receivable, received: boolean) => {
+    try {
+      await markReceivableReceived(r, received);
+      if (received) toast.success(`Recebimento registrado: ${r.name}`);
+    } catch (err) {
+      toast.error(supabaseErrorMessage(err));
+    }
+  };
 
   return (
     <Sheet>
@@ -120,12 +135,7 @@ export function ReceivablesSheet() {
                                       <span>
                                         <Checkbox
                                           checked
-                                          onCheckedChange={(v) =>
-                                            updateReceivable(r.id, {
-                                              received: v === true,
-                                              receivedAt: v === true ? r.receivedAt : undefined,
-                                            })
-                                          }
+                                          onCheckedChange={(v) => handleToggleReceived(r, v === true)}
                                         />
                                       </span>
                                     </TooltipTrigger>
@@ -137,13 +147,7 @@ export function ReceivablesSheet() {
                                 ) : (
                                   <Checkbox
                                     checked={r.received}
-                                    onCheckedChange={(v) =>
-                                      updateReceivable(r.id, {
-                                        received: v === true,
-                                        receivedAt:
-                                          v === true ? new Date().toISOString() : undefined,
-                                      })
-                                    }
+                                    onCheckedChange={(v) => handleToggleReceived(r, v === true)}
                                   />
                                 )}
                                 <div className="min-w-0 flex-1">
@@ -159,14 +163,21 @@ export function ReceivablesSheet() {
                                 <button
                                   onClick={() => setEditing(r)}
                                   aria-label="Editar"
-                                  className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground hover:bg-accent"
+                                  className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-accent"
                                 >
                                   <Pencil className="h-4 w-4" />
                                 </button>
                                 <button
-                                  onClick={() => deleteReceivable(r.id)}
+                                  onClick={async () => {
+                                    try {
+                                      await deleteReceivable(r.id);
+                                      toast.success("Recebível excluído");
+                                    } catch (err) {
+                                      toast.error(supabaseErrorMessage(err));
+                                    }
+                                  }}
                                   aria-label="Excluir"
-                                  className="grid h-8 w-8 place-items-center rounded-md text-destructive hover:bg-destructive/10"
+                                  className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-destructive hover:bg-destructive/10"
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </button>
@@ -188,9 +199,14 @@ export function ReceivablesSheet() {
         <ReceivableDialog
           open={creating}
           onOpenChange={setCreating}
-          onSubmit={(d) => {
-            addReceivable(d);
-            setCreating(false);
+          onSubmit={async (d) => {
+            try {
+              await addReceivable(d);
+              setCreating(false);
+              toast.success("Recebimento adicionado");
+            } catch (err) {
+              toast.error(supabaseErrorMessage(err));
+            }
           }}
         />
         <ReceivableDialog
@@ -198,9 +214,15 @@ export function ReceivablesSheet() {
           open={!!editing}
           onOpenChange={(v) => !v && setEditing(null)}
           initial={editing ?? undefined}
-          onSubmit={(d) => {
-            if (editing) updateReceivable(editing.id, d);
-            setEditing(null);
+          onSubmit={async (d) => {
+            if (!editing) return;
+            try {
+              await updateReceivable(editing.id, d);
+              setEditing(null);
+              toast.success("Recebimento atualizado");
+            } catch (err) {
+              toast.error(supabaseErrorMessage(err));
+            }
           }}
         />
       </SheetContent>
@@ -217,7 +239,7 @@ function ReceivableDialog({
   open: boolean;
   onOpenChange: (v: boolean) => void;
   initial?: Receivable;
-  onSubmit: (data: Omit<Receivable, "id">) => void;
+  onSubmit: (data: Omit<Receivable, "id">) => void | Promise<void>;
 }) {
   const today = new Date();
   const [name, setName] = useState(initial?.name ?? "");
@@ -225,19 +247,25 @@ function ReceivableDialog({
   const [year, setYear] = useState(initial?.year ?? today.getFullYear());
   const [month, setMonth] = useState(initial?.month ?? today.getMonth());
   const [received, setReceived] = useState(initial?.received ?? false);
+  const [saving, setSaving] = useState(false);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     const v = parseFloat(amount.replace(",", "."));
     if (!name.trim() || !v) return;
-    onSubmit({
-      name: name.trim(),
-      amount: v,
-      year,
-      month,
-      received,
-      receivedAt: received ? initial?.receivedAt ?? new Date().toISOString() : undefined,
-    });
+    setSaving(true);
+    try {
+      await onSubmit({
+        name: name.trim(),
+        amount: v,
+        year,
+        month,
+        received,
+        receivedAt: received ? initial?.receivedAt ?? new Date().toISOString() : undefined,
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -278,7 +306,9 @@ function ReceivableDialog({
             Já recebido
           </label>
           <DialogFooter>
-            <Button type="submit" className="w-full">{initial ? "Salvar" : "Adicionar"}</Button>
+            <Button type="submit" className="w-full" disabled={saving}>
+              {saving ? "Salvando..." : initial ? "Salvar" : "Adicionar"}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

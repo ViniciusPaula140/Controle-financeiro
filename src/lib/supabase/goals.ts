@@ -89,7 +89,7 @@ export function useGoals() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user]);
+  }, [user?.id]);
 
   return { goals, loading, error };
 }

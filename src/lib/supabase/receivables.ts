@@ -77,7 +77,10 @@ export function useReceivables() {
         },
         (payload) => {
           if (payload.eventType === 'INSERT') {
-            setReceivables((prev) => [...prev, mapReceivableFromDb(payload.new)]);
+            const mapped = mapReceivableFromDb(payload.new);
+            setReceivables((prev) =>
+              prev.some((r) => r.id === mapped.id) ? prev : [...prev, mapped],
+            );
           } else if (payload.eventType === 'UPDATE') {
             setReceivables((prev) =>
               prev.map((r) => (r.id === payload.new.id ? mapReceivableFromDb(payload.new) : r))
@@ -92,7 +95,7 @@ export function useReceivables() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user]);
+  }, [user?.id]);
 
   return { receivables, loading, error };
 }

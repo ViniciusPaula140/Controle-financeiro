@@ -86,7 +86,7 @@ export function useAccountBalances() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user]);
+  }, [user?.id]);
 
   return { accounts, loading, error };
 }

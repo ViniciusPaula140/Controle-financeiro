@@ -18,6 +18,7 @@ import {
   FIXED_BILL_TEMPLATES,
   type FixedBill,
 } from "@/lib/finance-store";
+import { supabaseErrorMessage } from "@/lib/supabase/realtime-utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -75,7 +76,16 @@ function ContasFixasPage() {
     return map;
   }, [bills]);
 
-  const yearKeys = [...grouped.keys()];
+  const yearKeys = useMemo(() => [...grouped.keys()], [grouped]);
+
+  const handleMarkPaid = async (bill: FixedBill, paid: boolean) => {
+    try {
+      await markFixedBillPaid(bill, paid);
+      if (paid) toast.success(`${bill.item} marcado como pago`);
+    } catch (err) {
+      toast.error(supabaseErrorMessage(err));
+    }
+  };
 
   return (
     <AppShell
@@ -105,7 +115,7 @@ function ContasFixasPage() {
                 <AccordionContent>
                   <Accordion type="multiple" defaultValue={[...ym.keys()].slice(0, 1).map(String)}>
                     {[...ym.entries()].map(([m, list]) => {
-                      const total = list.reduce((s, b) => s + b.amount, 0);
+                      const total = list.reduce((s, b) => s + (b.amount ?? 0), 0);
                       const key = mkKey(year, m);
                       const isDeleting = deleteMode === key;
                       return (
@@ -216,7 +226,7 @@ function ContasFixasPage() {
                                               <span>
                                                 <Checkbox
                                                   checked
-                                                  onCheckedChange={(v) => markFixedBillPaid(b.id, v === true)}
+                                                  onCheckedChange={(v) => handleMarkPaid(b, v === true)}
                                                 />
                                               </span>
                                             </TooltipTrigger>
@@ -227,7 +237,7 @@ function ContasFixasPage() {
                                         ) : (
                                           <Checkbox
                                             checked={b.paid}
-                                            onCheckedChange={(v) => markFixedBillPaid(b.id, v === true)}
+                                            onCheckedChange={(v) => handleMarkPaid(b, v === true)}
                                           />
                                         )}
                                       </TableCell>
@@ -265,7 +275,7 @@ function ContasFixasPage() {
         </TooltipProvider>
       )}
 
-      {creating && <AddFixedBillsDialog open onOpenChange={setCreating} />}
+      {creating && <AddFixedBillsDialog bills={bills} open onOpenChange={setCreating} />}
       {editing && (
         <EditFixedBillDialog
           open
@@ -294,12 +304,16 @@ function ContasFixasPage() {
             <Button variant="ghost" onClick={() => setConfirmDelete(false)}>Cancelar</Button>
             <Button
               variant="destructive"
-              onClick={() => {
-                deleteFixedBills(selectedIds);
-                setSelectedIds([]);
-                setDeleteMode(null);
-                setConfirmDelete(false);
-                toast.success("Itens excluídos");
+              onClick={async () => {
+                try {
+                  await deleteFixedBills(selectedIds);
+                  setSelectedIds([]);
+                  setDeleteMode(null);
+                  setConfirmDelete(false);
+                  toast.success("Itens excluídos");
+                } catch (err) {
+                  toast.error(supabaseErrorMessage(err));
+                }
               }}
             >
               <Trash2 className="h-4 w-4" /> Excluir
@@ -311,15 +325,30 @@ function ContasFixasPage() {
   );
 }
 
-function AddFixedBillsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+function AddFixedBillsDialog({
+  bills,
+  open,
+  onOpenChange,
+}: {
+  bills: FixedBill[];
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+}) {
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
   const [items, setItems] = useState<string[]>([]);
   const [customItem, setCustomItem] = useState("");
+  const [saving, setSaving] = useState(false);
 
-  const exists = fixedBillsExistInMonth(year, month);
-  const prev = lastMonthWithBills(year, month);
+  const exists = useMemo(
+    () => fixedBillsExistInMonth(bills, year, month),
+    [bills, year, month],
+  );
+  const prev = useMemo(
+    () => lastMonthWithBills(bills, year, month),
+    [bills, year, month],
+  );
   const allOn = items.length === FIXED_BILL_TEMPLATES.length && FIXED_BILL_TEMPLATES.every((t) => items.includes(t));
 
   const toggle = (item: string) => {
@@ -333,28 +362,48 @@ function AddFixedBillsDialog({ open, onOpenChange }: { open: boolean; onOpenChan
     setCustomItem("");
   };
 
-  const submit = () => {
+  const submit = async () => {
     if (exists) {
       toast.error("Já existem contas fixas criadas para este mês");
       return;
     }
-    items.forEach((item) => {
-      addFixedBill({
-        year, month, item,
-        amount: 0, dueDay: 5,
-        separated: "pendente", paid: false,
-      });
-    });
-    onOpenChange(false);
-    setItems([]);
-    toast.success(`${items.length} conta(s) adicionada(s)`);
+    if (items.length === 0) return;
+
+    setSaving(true);
+    try {
+      for (const item of items) {
+        await addFixedBill({
+          year,
+          month,
+          item,
+          amount: 0,
+          dueDay: 5,
+          separated: "pendente",
+          paid: false,
+        });
+      }
+      onOpenChange(false);
+      setItems([]);
+      toast.success(`${items.length} conta(s) adicionada(s)`);
+    } catch (err) {
+      toast.error(supabaseErrorMessage(err));
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const copyFromPrev = () => {
+  const copyFromPrev = async () => {
     if (!prev) return;
-    copyFixedBillsFromMonth(prev, { year, month });
-    toast.success(`Valores copiados de ${MONTH_NAMES[prev.month]}/${prev.year}`);
-    onOpenChange(false);
+    setSaving(true);
+    try {
+      await copyFixedBillsFromMonth(bills, prev, { year, month });
+      toast.success(`Valores copiados de ${MONTH_NAMES[prev.month]}/${prev.year}`);
+      onOpenChange(false);
+    } catch (err) {
+      toast.error(supabaseErrorMessage(err));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const allTemplates = useMemo(() => {
@@ -364,13 +413,13 @@ function AddFixedBillsDialog({ open, onOpenChange }: { open: boolean; onOpenChan
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md rounded-2xl">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[90vh] w-[calc(100vw-2rem)] max-w-md flex-col overflow-hidden rounded-2xl p-0">
+        <DialogHeader className="shrink-0 px-6 pt-6">
           <DialogTitle>Adicionar contas fixas</DialogTitle>
         </DialogHeader>
-        <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-6 pb-2">
+          <div className="grid w-full grid-cols-2 gap-3">
+            <div className="min-w-0 space-y-1.5">
               <Label>Mês</Label>
               <select
                 className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
@@ -380,33 +429,36 @@ function AddFixedBillsDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                 {MONTH_NAMES.map((n, i) => (<option key={n} value={i}>{n}</option>))}
               </select>
             </div>
-            <div className="space-y-1.5">
+            <div className="min-w-0 space-y-1.5">
               <Label>Ano</Label>
-              <Input type="number" value={year} onChange={(e) => setYear(Number(e.target.value))} />
+              <Input type="number" className="w-full" value={year} onChange={(e) => setYear(Number(e.target.value))} />
             </div>
           </div>
 
           {exists && (
-            <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive">
+            <p className="break-words rounded-lg bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive">
               Já existem contas fixas criadas para este mês.
             </p>
           )}
 
           {!exists && prev && (
-            <Button type="button" variant="outline" className="w-full" onClick={copyFromPrev}>
-              <Copy className="h-4 w-4" />
-              Deseja usar os valores usados no último mês? ({MONTH_NAMES[prev.month]}/{prev.year})
+            <Button type="button" variant="outline" className="h-auto w-full whitespace-normal py-2 text-left" onClick={copyFromPrev} disabled={saving}>
+              <Copy className="h-4 w-4 shrink-0" />
+              <span className="break-words">
+                Deseja usar os valores usados no último mês? ({MONTH_NAMES[prev.month]}/{prev.year})
+              </span>
             </Button>
           )}
 
-          <div className="flex gap-2">
+          <div className="flex w-full gap-2">
             <Input
+              className="min-w-0 flex-1"
               placeholder="Novo item (ex: Academia)"
               value={customItem}
               onChange={(e) => setCustomItem(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCustom(); } }}
             />
-            <Button type="button" variant="secondary" onClick={addCustom}>
+            <Button type="button" variant="secondary" className="shrink-0" onClick={addCustom}>
               <Plus className="h-4 w-4" />
             </Button>
           </div>
@@ -419,7 +471,7 @@ function AddFixedBillsDialog({ open, onOpenChange }: { open: boolean; onOpenChan
             {allOn ? "Desmarcar tudo" : "Selecionar tudo"}
           </button>
 
-          <div className="max-h-60 space-y-1 overflow-y-auto rounded-xl border border-border p-2">
+          <div className="max-h-[40vh] space-y-1 overflow-y-auto rounded-xl border border-border p-2">
             {allTemplates.map((item) => {
               const on = items.includes(item);
               return (
@@ -430,15 +482,15 @@ function AddFixedBillsDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                   }`}
                 >
                   <Checkbox checked={on} onCheckedChange={() => toggle(item)} />
-                  <span className="flex-1">{item}</span>
+                  <span className="min-w-0 flex-1 break-words">{item}</span>
                 </label>
               );
             })}
           </div>
         </div>
-        <DialogFooter>
-          <Button className="w-full" onClick={submit} disabled={items.length === 0 || exists}>
-            Adicionar {items.length > 0 && `(${items.length})`}
+        <DialogFooter className="shrink-0 border-t border-border px-6 py-4">
+          <Button className="w-full" onClick={submit} disabled={items.length === 0 || exists || saving}>
+            {saving ? "Salvando..." : `Adicionar${items.length > 0 ? ` (${items.length})` : ""}`}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -469,16 +521,21 @@ function EditFixedBillDialog({
     setSeparated(initial.separated);
   }, [initial]);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     const v = parseFloat(amount.replace(",", "."));
-    updateFixedBill(initial.id, {
-      item: item.trim() || initial.item,
-      amount: Number.isNaN(v) ? 0 : v,
-      dueDay: Math.max(1, Math.min(31, dueDay || 1)),
-      separated,
-    });
-    onClose();
+    try {
+      await updateFixedBill(initial.id, {
+        item: item.trim() || initial.item,
+        amount: Number.isNaN(v) ? 0 : v,
+        dueDay: Math.max(1, Math.min(31, dueDay || 1)),
+        separated,
+      });
+      toast.success("Conta fixa atualizada");
+      onClose();
+    } catch (err) {
+      toast.error(supabaseErrorMessage(err));
+    }
   };
 
   return (
@@ -520,7 +577,15 @@ function EditFixedBillDialog({
             </div>
           </div>
           <DialogFooter className="flex-col-reverse gap-2 sm:flex-row sm:justify-between">
-            <Button type="button" variant="destructive" onClick={() => { deleteFixedBill(initial.id); onClose(); }}>
+            <Button type="button" variant="destructive" onClick={async () => {
+              try {
+                await deleteFixedBill(initial.id);
+                toast.success("Conta fixa excluída");
+                onClose();
+              } catch (err) {
+                toast.error(supabaseErrorMessage(err));
+              }
+            }}>
               <Trash2 className="h-4 w-4" /> Excluir
             </Button>
             <Button type="submit">Salvar</Button>
@@ -546,18 +611,24 @@ function BulkEditDialog({
     ),
   );
 
-  const save = () => {
-    Object.entries(draft).forEach(([id, d]) => {
-      const amt = parseFloat(d.amount.replace(",", "."));
-      const due = parseInt(d.dueDay, 10);
-      updateFixedBill(id, {
-        item: d.item.trim() || "—",
-        amount: Number.isNaN(amt) ? 0 : amt,
-        dueDay: Number.isNaN(due) ? 1 : Math.max(1, Math.min(31, due)),
-      });
-    });
-    toast.success("Valores atualizados");
-    onClose();
+  const save = async () => {
+    try {
+      await Promise.all(
+        Object.entries(draft).map(([id, d]) => {
+          const amt = parseFloat(d.amount.replace(",", "."));
+          const due = parseInt(d.dueDay, 10);
+          return updateFixedBill(id, {
+            item: d.item.trim() || "—",
+            amount: Number.isNaN(amt) ? 0 : amt,
+            dueDay: Number.isNaN(due) ? 1 : Math.max(1, Math.min(31, due)),
+          });
+        }),
+      );
+      toast.success("Valores atualizados");
+      onClose();
+    } catch (err) {
+      toast.error(supabaseErrorMessage(err));
+    }
   };
 
   const [y, m] = monthKey.split("-").map(Number);

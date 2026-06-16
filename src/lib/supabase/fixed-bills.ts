@@ -79,7 +79,10 @@ export function useFixedBills() {
         },
         (payload) => {
           if (payload.eventType === 'INSERT') {
-            setBills((prev) => [...prev, mapFixedBillFromDb(payload.new)]);
+            const mapped = mapFixedBillFromDb(payload.new);
+            setBills((prev) =>
+              prev.some((b) => b.id === mapped.id) ? prev : [...prev, mapped],
+            );
           } else if (payload.eventType === 'UPDATE') {
             setBills((prev) =>
               prev.map((b) => (b.id === payload.new.id ? mapFixedBillFromDb(payload.new) : b))
@@ -94,7 +97,7 @@ export function useFixedBills() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user]);
+  }, [user?.id]);
 
   return { bills, loading, error };
 }
@@ -105,9 +108,21 @@ export async function addFixedBill(bill: Omit<FixedBill, 'id' | 'user_id'>) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('User not authenticated');
 
+  const dbRow = {
+    ...mapFixedBillToDb(bill),
+    user_id: user.id,
+    valor: bill.amount ?? 0,
+    ano: bill.year,
+    mes: bill.month,
+    item: bill.item,
+    vencimento: bill.dueDay ?? 5,
+    separado: bill.separated ?? 'pendente',
+    status_pago: bill.paid ?? false,
+  };
+
   const { data, error } = await supabase
     .from('contas_fixas')
-    .insert({ ...mapFixedBillToDb(bill), user_id: user.id })
+    .insert(dbRow)
     .select()
     .maybeSingle();
 

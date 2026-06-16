@@ -8,6 +8,10 @@ import type { Receivable } from './receivables';
 type DbRow = Record<string, unknown>;
 
 export function mapTransactionFromDb(row: DbRow): Transaction {
+  const obs = (row.observacao as string) ?? undefined;
+  const nl = obs?.indexOf('\n') ?? -1;
+  const description = nl >= 0 ? obs!.slice(0, nl) : obs;
+  const note = nl >= 0 ? obs!.slice(nl + 1) : obs;
   return {
     id: row.id as string,
     amount: Number(row.valor),
@@ -15,8 +19,8 @@ export function mapTransactionFromDb(row: DbRow): Transaction {
     category: row.categoria as string,
     account: row.conta_bancaria as string,
     date: row.data as string,
-    note: (row.observacao as string) ?? undefined,
-    description: (row.observacao as string) ?? undefined,
+    note,
+    description,
     recurring: Boolean(row.recorrente),
     user_id: row.user_id as string,
   };
@@ -33,8 +37,12 @@ export function mapTransactionToDb(
   if (transaction.category !== undefined) row.categoria = transaction.category;
   if (transaction.account !== undefined) row.conta_bancaria = transaction.account;
   if (transaction.date !== undefined) row.data = transaction.date;
-  const note = transaction.note ?? transaction.description;
-  if (note !== undefined) row.observacao = note;
+  if (transaction.description !== undefined && transaction.note !== undefined) {
+    row.observacao = `${transaction.description}\n${transaction.note}`;
+  } else {
+    const note = transaction.note ?? transaction.description;
+    if (note !== undefined) row.observacao = note;
+  }
   if (transaction.recurring !== undefined) row.recorrente = transaction.recurring;
   return row;
 }

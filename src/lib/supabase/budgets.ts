@@ -86,7 +86,7 @@ export function useBudgets() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user]);
+  }, [user?.id]);
 
   return { budgets, loading, error };
 }

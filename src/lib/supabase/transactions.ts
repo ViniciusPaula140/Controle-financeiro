@@ -63,8 +63,9 @@ export function useTransactions() {
 
     fetchTransactions();
 
+    const channelName = `transacoes-changes-${user.id}`;
     const channel = supabase
-      .channel('transacoes-changes')
+      .channel(channelName)
       .on(
         'postgres_changes',
         {
@@ -85,7 +86,13 @@ export function useTransactions() {
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('Successfully subscribed to transacoes changes');
+        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+          console.error('Realtime subscription error:', status);
+        }
+      });
 
     return () => {
       supabase.removeChannel(channel);

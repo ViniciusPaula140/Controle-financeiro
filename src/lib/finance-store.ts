@@ -191,8 +191,11 @@ const subTx = (cb: () => void) => {
 const emitTx = () => txListeners.forEach((l) => l());
 
 export function useTransactions() {
-  const { transactions } = useSupabaseTransactions();
+  const { transactions, loading, error } = useSupabaseTransactions();
   return transactions;
+}
+export function useTransactionsState() {
+  return useSupabaseTransactions();
 }
 export function addTransaction(t: Omit<Transaction, "id">) {
   if (t.category) addCategory(t.category);

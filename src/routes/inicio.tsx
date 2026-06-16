@@ -7,6 +7,7 @@ import { AppShell } from "@/components/finance/AppShell";
 import { AddTransactionDialog } from "@/components/finance/AddTransactionDialog";
 import {
   useTransactions,
+  useTransactionsState,
   useAccountBalances,
   useGoals,
   useFixedBills,
@@ -36,10 +37,20 @@ export const Route = createFileRoute("/inicio")({
 
 function InicioPage() {
   const transactions = useTransactions();
+  const transactionsState = useTransactionsState();
   const accounts = useAccountBalances();
   const goals = useGoals();
   const fixedBills = useFixedBills();
   const alerts = useAlertSettings();
+
+  // Handle errors gracefully
+  useEffect(() => {
+    if (transactionsState.error) {
+      toast.error("Erro ao carregar transações");
+      console.error("Transactions error:", transactionsState.error);
+    }
+  }, [transactionsState.error]);
+
   const accountsTotal = accounts.reduce((s, a) => s + a.balance, 0);
 
   const now = new Date();

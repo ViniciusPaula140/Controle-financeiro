@@ -22,6 +22,7 @@ export function mapTransactionFromDb(row: DbRow): Transaction {
     note,
     description,
     recurring: Boolean(row.recorrente),
+    fixedBillId: (row.conta_fixa_id as string) ?? undefined,
     user_id: row.user_id as string,
   };
 }
@@ -44,6 +45,7 @@ export function mapTransactionToDb(
     if (note !== undefined) row.observacao = note;
   }
   if (transaction.recurring !== undefined) row.recorrente = transaction.recurring;
+  if (transaction.fixedBillId !== undefined) row.conta_fixa_id = transaction.fixedBillId;
   return row;
 }
 
@@ -117,12 +119,16 @@ export function mapFixedBillFromDb(row: DbRow): FixedBill {
     paid: Boolean(row.status_pago),
     paidAt: (row.pago_em as string) ?? undefined,
     account: (row.conta_bancaria as string) ?? undefined,
+    txId: (row.transacao_id as string) ?? undefined,
     user_id: row.user_id as string,
   };
 }
 
 export function mapFixedBillToDb(
-  bill: Partial<Omit<FixedBill, 'id' | 'user_id'>>,
+  bill: Partial<Omit<FixedBill, 'id' | 'user_id'>> & {
+    txId?: string | null;
+    paidAt?: string | null;
+  },
 ): DbRow {
   const row: DbRow = {};
   if (bill.year !== undefined) row.ano = bill.year;
@@ -134,6 +140,7 @@ export function mapFixedBillToDb(
   if (bill.paid !== undefined) row.status_pago = bill.paid;
   if (bill.paidAt !== undefined) row.pago_em = bill.paidAt;
   if (bill.account !== undefined) row.conta_bancaria = bill.account;
+  if (bill.txId !== undefined) row.transacao_id = bill.txId;
   return row;
 }
 

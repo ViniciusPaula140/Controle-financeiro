@@ -3,7 +3,8 @@ import { useTransactions as useSupabaseTransactions, addTransaction as addSupaba
 import { useBudgets as useSupabaseBudgets, addBudget as addSupabaseBudget, updateBudget as updateSupabaseBudget, deleteBudget as deleteSupabaseBudget } from "./supabase/budgets";
 import { useAccountBalances as useSupabaseAccountBalances, addAccountBalance as addSupabaseAccountBalance, updateAccountBalance as updateSupabaseAccountBalance, deleteAccountBalance as deleteSupabaseAccountBalance } from "./supabase/account-balances";
 import { useGoals as useSupabaseGoals, addGoal as addSupabaseGoal, updateGoal as updateSupabaseGoal, deleteGoal as deleteSupabaseGoal } from "./supabase/goals";
-import { useFixedBills as useSupabaseFixedBills, addFixedBill as addSupabaseFixedBill, updateFixedBill as updateSupabaseFixedBill, deleteFixedBill as deleteSupabaseFixedBill, markFixedBillPaid as markSupabaseFixedBillPaid } from "./supabase/fixed-bills";
+import { useFixedBills as useSupabaseFixedBills, addFixedBill as addSupabaseFixedBill, updateFixedBill as updateSupabaseFixedBill, deleteFixedBill as deleteSupabaseFixedBill, deleteFixedBills as deleteSupabaseFixedBills, markFixedBillPaid as markSupabaseFixedBillPaid, FIXED_BILL_ZERO_AMOUNT_MSG } from "./supabase/fixed-bills";
+import { FIXED_BILL_CATEGORY, DEFAULT_PAYMENT_METHOD } from "./supabase/fixed-bill-sync";
 import { useReceivables as useSupabaseReceivables, addReceivable as addSupabaseReceivable, updateReceivable as updateSupabaseReceivable, deleteReceivable as deleteSupabaseReceivable, markReceivableReceived as markSupabaseReceivableReceived, type Receivable as SupabaseReceivable } from "./supabase/receivables";
 
 // Categories and accounts are dynamic strings so the user can create new ones.
@@ -16,11 +17,15 @@ const DEFAULT_CATEGORIES: Category[] = [
   "Transporte",
   "Lazer",
   "Saúde",
+  "Viagem",
+  "Educação",
   "Salário",
+  "Conta fixa",
   "Outros",
 ];
 
 const DEFAULT_ACCOUNTS: Account[] = [
+  "Dinheiro",
   "Nubank",
   "Itaú",
   "Inter",
@@ -41,6 +46,8 @@ export function addAccountName(_name: string) {}
 /** @deprecated derived from data */
 export const ALL_ACCOUNTS = DEFAULT_ACCOUNTS;
 
+export { FIXED_BILL_CATEGORY, DEFAULT_PAYMENT_METHOD, FIXED_BILL_ZERO_AMOUNT_MSG };
+
 export interface Transaction {
   id: string;
   amount: number;
@@ -51,6 +58,8 @@ export interface Transaction {
   description?: string;
   note?: string;
   recurring?: boolean;
+  /** Linked fixed bill id (when created from Contas fixas). */
+  fixedBillId?: string;
 }
 
 export interface Budget {
@@ -107,6 +116,8 @@ export interface FixedBill {
   paid: boolean;
   paidAt?: string;
   account?: Account;
+  /** Linked auto-generated transaction id (when marked paid). */
+  txId?: string;
 }
 
 export interface AlertSettings {
@@ -337,7 +348,7 @@ export async function deleteFixedBill(id: string) {
 }
 
 export async function deleteFixedBills(ids: string[]) {
-  await Promise.all(ids.map((id) => deleteSupabaseFixedBill(id)));
+  return deleteSupabaseFixedBills(ids);
 }
 
 /** Returns true if any bill exists for the given year+month (uses live Supabase data). */
@@ -377,25 +388,14 @@ export async function copyFixedBillsFromMonth(
       month: dst.month,
       paid: false,
       paidAt: undefined,
+      txId: undefined,
     });
   }
 }
 
-/** Marks a bill paid (or unpaid). When paid, also creates a transaction. */
+/** Marks a bill paid (or unpaid). Syncs with linked transaction. */
 export async function markFixedBillPaid(bill: FixedBill, paid: boolean) {
-  await markSupabaseFixedBillPaid(bill.id, paid);
-  if (paid && !bill.paid) {
-    const dateStr = new Date().toLocaleDateString("pt-BR");
-    await addSupabaseTransaction({
-      amount: bill.amount,
-      type: "expense",
-      category: "Outros",
-      account: bill.account ?? "Nubank",
-      date: new Date().toISOString(),
-      description: bill.item,
-      note: `Pagamento via aba Contas fixas, paga dia ${dateStr}`,
-    });
-  }
+  return markSupabaseFixedBillPaid(bill, paid);
 }
 
 // ---------- Alert Settings ----------
@@ -425,7 +425,7 @@ export function useCategoriesList(): Category[] {
   const txs = useTransactions();
   const bs = useBudgets();
   return useMemo(() => {
-    const s = new Set<string>();
+    const s = new Set<string>(DEFAULT_CATEGORIES);
     txs.forEach((t) => t.category && s.add(t.category));
     bs.forEach((b) => b.category && s.add(b.category));
     return [...s].sort((a, b) => a.localeCompare(b));
@@ -452,7 +452,10 @@ const STATIC_CATEGORY_COLORS: Record<string, string> = {
   Transporte: "oklch(0.78 0.15 85)",
   Lazer: "oklch(0.6 0.18 305)",
   Saúde: "oklch(0.62 0.18 155)",
+  Viagem: "oklch(0.68 0.16 220)",
+  Educação: "oklch(0.66 0.14 280)",
   Salário: "oklch(0.62 0.18 155)",
+  "Conta fixa": "oklch(0.55 0.12 200)",
   Outros: "oklch(0.5 0.02 250)",
 };
 const PALETTE = [

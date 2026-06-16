@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS public.transacoes (
   data TIMESTAMP WITH TIME ZONE NOT NULL,
   observacao TEXT,
   recorrente BOOLEAN DEFAULT FALSE,
+  conta_fixa_id UUID REFERENCES public.contas_fixas(id) ON DELETE SET NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
@@ -43,7 +44,7 @@ CREATE TABLE IF NOT EXISTS public.contas_fixas (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
   item TEXT NOT NULL,
-  valor NUMERIC NOT NULL CHECK (valor > 0),
+  valor NUMERIC NOT NULL CHECK (valor >= 0),
   vencimento INTEGER NOT NULL CHECK (vencimento >= 1 AND vencimento <= 31),
   status_pago BOOLEAN DEFAULT FALSE NOT NULL,
   mes INTEGER NOT NULL CHECK (mes >= 0 AND mes <= 11),
@@ -51,6 +52,7 @@ CREATE TABLE IF NOT EXISTS public.contas_fixas (
   separado TEXT DEFAULT 'pendente' CHECK (separado IN ('ok', 'pendente')),
   conta_bancaria TEXT,
   pago_em TIMESTAMP WITH TIME ZONE,
+  transacao_id UUID REFERENCES public.transacoes(id) ON DELETE SET NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
@@ -234,6 +236,8 @@ CREATE INDEX IF NOT EXISTS idx_orcamentos_categoria ON public.orcamentos(user_id
 
 CREATE INDEX IF NOT EXISTS idx_contas_fixas_user_id ON public.contas_fixas(user_id);
 CREATE INDEX IF NOT EXISTS idx_contas_fixas_mes_ano ON public.contas_fixas(user_id, mes, ano);
+CREATE INDEX IF NOT EXISTS idx_contas_fixas_transacao_id ON public.contas_fixas(transacao_id);
+CREATE INDEX IF NOT EXISTS idx_transacoes_conta_fixa_id ON public.transacoes(conta_fixa_id);
 
 CREATE INDEX IF NOT EXISTS idx_dinheiro_receber_user_id ON public.dinheiro_receber(user_id);
 CREATE INDEX IF NOT EXISTS idx_dinheiro_receber_mes_ano ON public.dinheiro_receber(user_id, mes, ano);

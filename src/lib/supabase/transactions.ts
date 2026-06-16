@@ -3,6 +3,10 @@ import { useAuth } from './auth-context';
 import { useEffect, useState } from 'react';
 import { mapTransactionFromDb, mapTransactionToDb } from './mappers';
 import { realtimeChannelName, requireRow } from './realtime-utils';
+import {
+  syncFixedBillFromTransaction,
+  unlinkFixedBillFromTransaction,
+} from './fixed-bill-sync';
 
 export interface Transaction {
   id: string;
@@ -14,6 +18,7 @@ export interface Transaction {
   description?: string;
   note?: string;
   recurring?: boolean;
+  fixedBillId?: string;
   user_id: string;
 }
 
@@ -83,20 +88,14 @@ export function useTransactions() {
             );
           } else if (payload.eventType === 'UPDATE') {
             setTransactions((prev) =>
-              prev.map((t) => (t.id === payload.new.id ? mapTransactionFromDb(payload.new) : t))
+              prev.map((t) => (t.id === payload.new.id ? mapTransactionFromDb(payload.new) : t)),
             );
           } else if (payload.eventType === 'DELETE') {
             setTransactions((prev) => prev.filter((t) => t.id !== payload.old.id));
           }
-        }
+        },
       )
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          console.log('Successfully subscribed to transacoes changes');
-        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
-          console.error('Realtime subscription error:', status);
-        }
-      });
+      .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
@@ -109,7 +108,9 @@ export function useTransactions() {
 export async function addTransaction(transaction: Omit<Transaction, 'id' | 'user_id'>) {
   if (!supabase) throw new Error('Supabase client is not configured');
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   if (!user) throw new Error('User not authenticated');
 
   const { data, error } = await supabase
@@ -122,7 +123,11 @@ export async function addTransaction(transaction: Omit<Transaction, 'id' | 'user
   return mapTransactionFromDb(requireRow(data, 'inserção de transação'));
 }
 
-export async function updateTransaction(id: string, patch: Partial<Omit<Transaction, 'id' | 'user_id'>>) {
+/** Updates without syncing back to linked fixed bills (internal use). */
+export async function updateTransactionRaw(
+  id: string,
+  patch: Partial<Omit<Transaction, 'id' | 'user_id'>>,
+) {
   if (!supabase) throw new Error('Supabase client is not configured');
 
   const { data, error } = await supabase
@@ -136,9 +141,30 @@ export async function updateTransaction(id: string, patch: Partial<Omit<Transact
   return mapTransactionFromDb(requireRow(data, 'atualização de transação'));
 }
 
-export async function deleteTransaction(id: string) {
+export async function updateTransaction(
+  id: string,
+  patch: Partial<Omit<Transaction, 'id' | 'user_id'>>,
+) {
+  const updated = await updateTransactionRaw(id, patch);
+
+  await syncFixedBillFromTransaction(id, {
+    amount: patch.amount,
+    account: patch.account,
+    description: patch.description,
+  });
+
+  return updated;
+}
+
+/** Deletes without unlinking fixed bills (internal use). */
+export async function deleteTransactionRaw(id: string) {
   if (!supabase) throw new Error('Supabase client is not configured');
 
   const { error } = await supabase.from('transacoes').delete().eq('id', id);
   if (error) throw error;
+}
+
+export async function deleteTransaction(id: string) {
+  await unlinkFixedBillFromTransaction(id);
+  await deleteTransactionRaw(id);
 }

@@ -13,10 +13,13 @@ import {
   fixedBillsExistInMonth,
   lastMonthWithBills,
   copyFixedBillsFromMonth,
+  useAccountsList,
+  DEFAULT_PAYMENT_METHOD,
   BRL,
   MONTH_NAMES,
   FIXED_BILL_TEMPLATES,
   type FixedBill,
+  type Account,
 } from "@/lib/finance-store";
 import { supabaseErrorMessage } from "@/lib/supabase/realtime-utils";
 import { Button } from "@/components/ui/button";
@@ -54,8 +57,13 @@ export const Route = createFileRoute("/contas-fixas")({
 type MonthKey = string; // `${year}-${month}`
 const mkKey = (y: number, m: number) => `${y}-${m}`;
 
+function paymentLabel(bill: FixedBill) {
+  return bill.account?.trim() || DEFAULT_PAYMENT_METHOD;
+}
+
 function ContasFixasPage() {
   const bills = useFixedBills();
+  const accounts = useAccountsList();
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<FixedBill | null>(null);
   const [bulkEditMonth, setBulkEditMonth] = useState<MonthKey | null>(null);
@@ -82,6 +90,7 @@ function ContasFixasPage() {
     try {
       await markFixedBillPaid(bill, paid);
       if (paid) toast.success(`${bill.item} marcado como pago`);
+      else toast.success(`${bill.item} desmarcado`);
     } catch (err) {
       toast.error(supabaseErrorMessage(err));
     }
@@ -180,6 +189,7 @@ function ContasFixasPage() {
                                     <TableHead className="text-center">Vence</TableHead>
                                     <TableHead className="text-center">Sep.</TableHead>
                                     <TableHead className="text-center">Pago</TableHead>
+                                    <TableHead>Pagamento</TableHead>
                                     <TableHead className="w-10" />
                                   </TableRow>
                                 </TableHeader>
@@ -241,6 +251,9 @@ function ContasFixasPage() {
                                           />
                                         )}
                                       </TableCell>
+                                      <TableCell className="text-xs text-muted-foreground">
+                                        {paymentLabel(b)}
+                                      </TableCell>
                                       <TableCell className="text-right">
                                         <button
                                           onClick={() => setEditing(b)}
@@ -258,7 +271,7 @@ function ContasFixasPage() {
                                       Total custo fixo
                                     </TableCell>
                                     <TableCell className="text-right font-bold">{BRL(total)}</TableCell>
-                                    <TableCell colSpan={4} />
+                                    <TableCell colSpan={5} />
                                   </TableRow>
                                 </TableBody>
                               </Table>
@@ -281,6 +294,7 @@ function ContasFixasPage() {
           open
           onOpenChange={(v) => !v && setEditing(null)}
           initial={editing}
+          accounts={accounts}
           onClose={() => setEditing(null)}
         />
       )}
@@ -288,6 +302,7 @@ function ContasFixasPage() {
         <BulkEditDialog
           monthKey={bulkEditMonth}
           onClose={() => setBulkEditMonth(null)}
+          accounts={accounts}
           bills={bills.filter((b) => mkKey(b.year, b.month) === bulkEditMonth)}
         />
       )}
@@ -380,6 +395,7 @@ function AddFixedBillsDialog({
           dueDay: 5,
           separated: "pendente",
           paid: false,
+          account: DEFAULT_PAYMENT_METHOD,
         });
       }
       onOpenChange(false);
@@ -502,23 +518,27 @@ function EditFixedBillDialog({
   open,
   onOpenChange,
   initial,
+  accounts,
   onClose,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   initial: FixedBill;
+  accounts: Account[];
   onClose: () => void;
 }) {
   const [item, setItem] = useState(initial.item);
   const [amount, setAmount] = useState(String(initial.amount).replace(".", ","));
   const [dueDay, setDueDay] = useState(initial.dueDay);
   const [separated, setSeparated] = useState<FixedBill["separated"]>(initial.separated);
+  const [account, setAccount] = useState(initial.account ?? DEFAULT_PAYMENT_METHOD);
 
   useEffect(() => {
     setItem(initial.item);
     setAmount(String(initial.amount).replace(".", ","));
     setDueDay(initial.dueDay);
     setSeparated(initial.separated);
+    setAccount(initial.account ?? DEFAULT_PAYMENT_METHOD);
   }, [initial]);
 
   const submit = async (e: React.FormEvent) => {
@@ -530,6 +550,7 @@ function EditFixedBillDialog({
         amount: Number.isNaN(v) ? 0 : v,
         dueDay: Math.max(1, Math.min(31, dueDay || 1)),
         separated,
+        account: account.trim() || DEFAULT_PAYMENT_METHOD,
       });
       toast.success("Conta fixa atualizada");
       onClose();
@@ -558,6 +579,20 @@ function EditFixedBillDialog({
               <Label>Dia venc.</Label>
               <Input type="number" min={1} max={31} value={dueDay} onChange={(e) => setDueDay(Number(e.target.value))} />
             </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Método de pagamento</Label>
+            <select
+              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+              value={account}
+              onChange={(e) => setAccount(e.target.value)}
+            >
+              {accounts.map((a) => (
+                <option key={a} value={a}>
+                  {a}
+                </option>
+              ))}
+            </select>
           </div>
           <div className="space-y-1.5">
             <Label>Separado</Label>
@@ -599,15 +634,27 @@ function EditFixedBillDialog({
 function BulkEditDialog({
   monthKey,
   bills,
+  accounts,
   onClose,
 }: {
   monthKey: string;
   bills: FixedBill[];
+  accounts: Account[];
   onClose: () => void;
 }) {
-  const [draft, setDraft] = useState<Record<string, { item: string; amount: string; dueDay: string }>>(() =>
+  const [draft, setDraft] = useState<
+    Record<string, { item: string; amount: string; dueDay: string; account: string }>
+  >(() =>
     Object.fromEntries(
-      bills.map((b) => [b.id, { item: b.item, amount: String(b.amount).replace(".", ","), dueDay: String(b.dueDay) }]),
+      bills.map((b) => [
+        b.id,
+        {
+          item: b.item,
+          amount: String(b.amount).replace(".", ","),
+          dueDay: String(b.dueDay),
+          account: b.account ?? DEFAULT_PAYMENT_METHOD,
+        },
+      ]),
     ),
   );
 
@@ -621,6 +668,7 @@ function BulkEditDialog({
             item: d.item.trim() || "—",
             amount: Number.isNaN(amt) ? 0 : amt,
             dueDay: Number.isNaN(due) ? 1 : Math.max(1, Math.min(31, due)),
+            account: d.account.trim() || DEFAULT_PAYMENT_METHOD,
           });
         }),
       );
@@ -646,6 +694,7 @@ function BulkEditDialog({
                 <TableHead>Item</TableHead>
                 <TableHead className="w-32">Valor (R$)</TableHead>
                 <TableHead className="w-20">Dia</TableHead>
+                <TableHead className="w-36">Pagamento</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -672,6 +721,21 @@ function BulkEditDialog({
                       value={draft[b.id].dueDay}
                       onChange={(e) => setDraft({ ...draft, [b.id]: { ...draft[b.id], dueDay: e.target.value } })}
                     />
+                  </TableCell>
+                  <TableCell>
+                    <select
+                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm"
+                      value={draft[b.id].account}
+                      onChange={(e) =>
+                        setDraft({ ...draft, [b.id]: { ...draft[b.id], account: e.target.value } })
+                      }
+                    >
+                      {accounts.map((a) => (
+                        <option key={a} value={a}>
+                          {a}
+                        </option>
+                      ))}
+                    </select>
                   </TableCell>
                 </TableRow>
               ))}

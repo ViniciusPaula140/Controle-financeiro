@@ -3,6 +3,20 @@ import { useAuth } from './auth-context';
 import { useEffect, useState } from 'react';
 import { mapFixedBillFromDb, mapFixedBillToDb } from './mappers';
 import { realtimeChannelName, requireRow } from './realtime-utils';
+import {
+  buildFixedBillTransaction,
+  fixedBillPaymentMethod,
+} from './fixed-bill-sync';
+import {
+  addTransaction,
+  deleteTransactionRaw,
+  updateTransactionRaw,
+} from './transactions';
+
+type FixedBillPatch = Partial<Omit<FixedBill, 'id' | 'user_id'>> & {
+  txId?: string | null;
+  paidAt?: string | null;
+};
 
 export interface FixedBill {
   id: string;
@@ -15,7 +29,30 @@ export interface FixedBill {
   paid: boolean;
   paidAt?: string;
   account?: string;
+  txId?: string;
   user_id: string;
+}
+
+export const FIXED_BILL_ZERO_AMOUNT_MSG =
+  'Informe um valor maior que zero antes de marcar como pago.';
+
+async function fetchFixedBill(id: string): Promise<FixedBill | null> {
+  if (!supabase) throw new Error('Supabase client is not configured');
+
+  const { data, error } = await supabase.from('contas_fixas').select('*').eq('id', id).maybeSingle();
+  if (error) throw error;
+  return data ? mapFixedBillFromDb(data) : null;
+}
+
+async function syncLinkedTransaction(bill: FixedBill) {
+  if (!bill.txId) return;
+
+  await updateTransactionRaw(bill.txId, {
+    amount: bill.amount,
+    account: fixedBillPaymentMethod(bill),
+    description: bill.item,
+    category: 'Conta fixa',
+  });
 }
 
 export function useFixedBills() {
@@ -85,12 +122,12 @@ export function useFixedBills() {
             );
           } else if (payload.eventType === 'UPDATE') {
             setBills((prev) =>
-              prev.map((b) => (b.id === payload.new.id ? mapFixedBillFromDb(payload.new) : b))
+              prev.map((b) => (b.id === payload.new.id ? mapFixedBillFromDb(payload.new) : b)),
             );
           } else if (payload.eventType === 'DELETE') {
             setBills((prev) => prev.filter((b) => b.id !== payload.old.id));
           }
-        }
+        },
       )
       .subscribe();
 
@@ -102,10 +139,12 @@ export function useFixedBills() {
   return { bills, loading, error };
 }
 
-export async function addFixedBill(bill: Omit<FixedBill, 'id' | 'user_id'>) {
+export async function addFixedBill(bill: Omit<FixedBill, 'id' | 'user_id' | 'txId'>) {
   if (!supabase) throw new Error('Supabase client is not configured');
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   if (!user) throw new Error('User not authenticated');
 
   const dbRow = {
@@ -118,19 +157,16 @@ export async function addFixedBill(bill: Omit<FixedBill, 'id' | 'user_id'>) {
     vencimento: bill.dueDay ?? 5,
     separado: bill.separated ?? 'pendente',
     status_pago: bill.paid ?? false,
+    conta_bancaria: bill.account ?? null,
   };
 
-  const { data, error } = await supabase
-    .from('contas_fixas')
-    .insert(dbRow)
-    .select()
-    .maybeSingle();
+  const { data, error } = await supabase.from('contas_fixas').insert(dbRow).select().maybeSingle();
 
   if (error) throw error;
   return mapFixedBillFromDb(requireRow(data, 'inserção de conta fixa'));
 }
 
-export async function updateFixedBill(id: string, patch: Partial<Omit<FixedBill, 'id' | 'user_id'>>) {
+export async function updateFixedBill(id: string, patch: FixedBillPatch) {
   if (!supabase) throw new Error('Supabase client is not configured');
 
   const { data, error } = await supabase
@@ -141,26 +177,63 @@ export async function updateFixedBill(id: string, patch: Partial<Omit<FixedBill,
     .maybeSingle();
 
   if (error) throw error;
-  return mapFixedBillFromDb(requireRow(data, 'atualização de conta fixa'));
+  const updated = mapFixedBillFromDb(requireRow(data, 'atualização de conta fixa'));
+
+  if (updated.paid && updated.txId) {
+    await syncLinkedTransaction(updated);
+  }
+
+  return updated;
 }
 
 export async function deleteFixedBill(id: string) {
   if (!supabase) throw new Error('Supabase client is not configured');
 
+  const bill = await fetchFixedBill(id);
+  if (bill?.txId) {
+    await deleteTransactionRaw(bill.txId);
+  }
+
   const { error } = await supabase.from('contas_fixas').delete().eq('id', id);
   if (error) throw error;
 }
 
-export async function markFixedBillPaid(id: string, paid: boolean) {
-  if (!supabase) throw new Error('Supabase client is not configured');
+export async function deleteFixedBills(ids: string[]) {
+  for (const id of ids) {
+    await deleteFixedBill(id);
+  }
+}
 
-  const { error } = await supabase
-    .from('contas_fixas')
-    .update({
-      status_pago: paid,
-      pago_em: paid ? new Date().toISOString() : null,
-    })
-    .eq('id', id);
+export async function markFixedBillPaid(bill: FixedBill, paid: boolean) {
+  if (!paid) {
+    if (bill.txId) {
+      await deleteTransactionRaw(bill.txId);
+    }
+    return updateFixedBill(bill.id, {
+      paid: false,
+      paidAt: null,
+      txId: null,
+    });
+  }
 
-  if (error) throw error;
+  if (bill.amount <= 0) {
+    throw new Error(FIXED_BILL_ZERO_AMOUNT_MSG);
+  }
+
+  if (bill.paid && bill.txId) {
+    await syncLinkedTransaction(bill);
+    return bill;
+  }
+
+  const paidAt = new Date().toISOString();
+  const tx = await addTransaction({
+    ...buildFixedBillTransaction(bill, paidAt),
+    fixedBillId: bill.id,
+  });
+
+  return updateFixedBill(bill.id, {
+    paid: true,
+    paidAt,
+    txId: tx.id,
+  });
 }

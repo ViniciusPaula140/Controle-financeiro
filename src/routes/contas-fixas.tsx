@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Pencil, Trash2, Copy, Table as TableIcon, CheckSquare, X } from "lucide-react";
+import { Plus, Pencil, Trash2, Copy, CheckSquare, X } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/finance/AppShell";
 import {
@@ -48,6 +48,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 export const Route = createFileRoute("/contas-fixas")({
   head: () => ({ meta: [{ title: "Contas Fixas" }] }),
@@ -66,7 +67,7 @@ function ContasFixasPage() {
   const accounts = useAccountsList();
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<FixedBill | null>(null);
-  const [bulkEditMonth, setBulkEditMonth] = useState<MonthKey | null>(null);
+  const [bulkEdit, setBulkEdit] = useState<{ monthKey: MonthKey; focusCreate?: boolean } | null>(null);
   const [deleteMode, setDeleteMode] = useState<MonthKey | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -136,8 +137,15 @@ function ContasFixasPage() {
                           </AccordionTrigger>
                           <AccordionContent>
                             <div className="mb-3 flex flex-wrap items-center gap-2">
-                              <Button size="sm" variant="outline" onClick={() => setBulkEditMonth(key)}>
-                                <TableIcon className="h-3.5 w-3.5" /> Editar Valores
+                              <Button size="sm" variant="outline" onClick={() => setBulkEdit({ monthKey: key })}>
+                                <Pencil className="h-3.5 w-3.5" /> Editar valores
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setBulkEdit({ monthKey: key, focusCreate: true })}
+                              >
+                                <Plus className="h-3.5 w-3.5" /> Adicionar novo custo
                               </Button>
                               {!isDeleting ? (
                                 <Button
@@ -298,12 +306,13 @@ function ContasFixasPage() {
           onClose={() => setEditing(null)}
         />
       )}
-      {bulkEditMonth && (
+      {bulkEdit && (
         <BulkEditDialog
-          monthKey={bulkEditMonth}
-          onClose={() => setBulkEditMonth(null)}
+          monthKey={bulkEdit.monthKey}
+          focusCreate={bulkEdit.focusCreate}
+          onClose={() => setBulkEdit(null)}
           accounts={accounts}
-          bills={bills.filter((b) => mkKey(b.year, b.month) === bulkEditMonth)}
+          bills={bills.filter((b) => mkKey(b.year, b.month) === bulkEdit.monthKey)}
         />
       )}
 
@@ -378,10 +387,6 @@ function AddFixedBillsDialog({
   };
 
   const submit = async () => {
-    if (exists) {
-      toast.error("Já existem contas fixas criadas para este mês");
-      return;
-    }
     if (items.length === 0) return;
 
     setSaving(true);
@@ -452,8 +457,8 @@ function AddFixedBillsDialog({
           </div>
 
           {exists && (
-            <p className="break-words rounded-lg bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive">
-              Já existem contas fixas criadas para este mês.
+            <p className="break-words rounded-lg bg-muted px-3 py-2 text-xs font-medium text-muted-foreground">
+              Este mês já possui contas. Novos itens serão adicionados à lista existente.
             </p>
           )}
 
@@ -505,7 +510,7 @@ function AddFixedBillsDialog({
           </div>
         </div>
         <DialogFooter className="shrink-0 border-t border-border px-6 py-4">
-          <Button className="w-full" onClick={submit} disabled={items.length === 0 || exists || saving}>
+          <Button className="w-full" onClick={submit} disabled={items.length === 0 || saving}>
             {saving ? "Salvando..." : `Adicionar${items.length > 0 ? ` (${items.length})` : ""}`}
           </Button>
         </DialogFooter>
@@ -631,32 +636,83 @@ function EditFixedBillDialog({
   );
 }
 
+function billToDraftEntry(b: FixedBill) {
+  return {
+    item: b.item,
+    amount: String(b.amount).replace(".", ","),
+    dueDay: String(b.dueDay),
+    account: b.account ?? DEFAULT_PAYMENT_METHOD,
+  };
+}
+
 function BulkEditDialog({
   monthKey,
   bills,
   accounts,
+  focusCreate,
   onClose,
 }: {
   monthKey: string;
   bills: FixedBill[];
   accounts: Account[];
+  focusCreate?: boolean;
   onClose: () => void;
 }) {
   const [draft, setDraft] = useState<
     Record<string, { item: string; amount: string; dueDay: string; account: string }>
-  >(() =>
-    Object.fromEntries(
-      bills.map((b) => [
-        b.id,
-        {
-          item: b.item,
-          amount: String(b.amount).replace(".", ","),
-          dueDay: String(b.dueDay),
-          account: b.account ?? DEFAULT_PAYMENT_METHOD,
-        },
-      ]),
-    ),
-  );
+  >(() => Object.fromEntries(bills.map((b) => [b.id, billToDraftEntry(b)])));
+
+  const [showCreateForm, setShowCreateForm] = useState(focusCreate ?? false);
+  const [newItem, setNewItem] = useState("");
+  const [newAmount, setNewAmount] = useState("");
+  const [newAccount, setNewAccount] = useState(DEFAULT_PAYMENT_METHOD);
+  const [creating, setCreating] = useState(false);
+
+  useEffect(() => {
+    setDraft((prev) => {
+      const next = { ...prev };
+      for (const b of bills) {
+        if (!next[b.id]) next[b.id] = billToDraftEntry(b);
+      }
+      for (const id of Object.keys(next)) {
+        if (!bills.some((b) => b.id === id)) delete next[id];
+      }
+      return next;
+    });
+  }, [bills]);
+
+  const [y, m] = monthKey.split("-").map(Number);
+
+  const handleCreateCost = async () => {
+    const name = newItem.trim();
+    if (!name) {
+      toast.error("Informe o nome do custo");
+      return;
+    }
+    const amt = parseFloat(newAmount.replace(",", "."));
+    setCreating(true);
+    try {
+      const created = await addFixedBill({
+        year: y,
+        month: m,
+        item: name,
+        amount: Number.isNaN(amt) ? 0 : amt,
+        dueDay: 5,
+        separated: "pendente",
+        paid: false,
+        account: newAccount.trim() || DEFAULT_PAYMENT_METHOD,
+      });
+      setDraft((prev) => ({ ...prev, [created.id]: billToDraftEntry(created) }));
+      setNewItem("");
+      setNewAmount("");
+      setNewAccount(DEFAULT_PAYMENT_METHOD);
+      toast.success(`"${name}" adicionado`);
+    } catch (err) {
+      toast.error(supabaseErrorMessage(err));
+    } finally {
+      setCreating(false);
+    }
+  };
 
   const save = async () => {
     try {
@@ -679,72 +735,180 @@ function BulkEditDialog({
     }
   };
 
-  const [y, m] = monthKey.split("-").map(Number);
+  const sortedBills = useMemo(
+    () => [...bills].sort((a, b) => a.item.localeCompare(b.item, "pt-BR")),
+    [bills],
+  );
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-2xl rounded-2xl">
-        <DialogHeader>
-          <DialogTitle>Editar valores — {MONTH_NAMES[m]}/{y}</DialogTitle>
+      <DialogContent className="flex max-h-[90vh] w-[calc(100vw-2rem)] max-w-2xl flex-col overflow-hidden rounded-2xl p-0">
+        <DialogHeader className="shrink-0 px-6 pt-6">
+          <DialogTitle>Contas fixas — {MONTH_NAMES[m]}/{y}</DialogTitle>
         </DialogHeader>
-        <div className="max-h-[60vh] overflow-y-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Item</TableHead>
-                <TableHead className="w-32">Valor (R$)</TableHead>
-                <TableHead className="w-20">Dia</TableHead>
-                <TableHead className="w-36">Pagamento</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {bills.map((b) => (
-                <TableRow key={b.id}>
-                  <TableCell>
-                    <Input
-                      value={draft[b.id].item}
-                      onChange={(e) => setDraft({ ...draft, [b.id]: { ...draft[b.id], item: e.target.value } })}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Input
-                      inputMode="decimal"
-                      value={draft[b.id].amount}
-                      onChange={(e) => setDraft({ ...draft, [b.id]: { ...draft[b.id], amount: e.target.value } })}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Input
-                      type="number"
-                      min={1}
-                      max={31}
-                      value={draft[b.id].dueDay}
-                      onChange={(e) => setDraft({ ...draft, [b.id]: { ...draft[b.id], dueDay: e.target.value } })}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <select
-                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm"
-                      value={draft[b.id].account}
-                      onChange={(e) =>
-                        setDraft({ ...draft, [b.id]: { ...draft[b.id], account: e.target.value } })
-                      }
-                    >
-                      {accounts.map((a) => (
-                        <option key={a} value={a}>
-                          {a}
-                        </option>
-                      ))}
-                    </select>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+
+        <div className="shrink-0 space-y-3 border-b border-border px-6 pb-4">
+          {!showCreateForm ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-full"
+              onClick={() => setShowCreateForm(true)}
+            >
+              <Plus className="h-3.5 w-3.5" /> Criar novo custo
+            </Button>
+          ) : (
+            <div className="space-y-3 rounded-xl border border-border bg-muted/30 p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Criar novo custo
+              </p>
+              <div className="space-y-1.5">
+                <Label>Nome</Label>
+                <Input
+                  placeholder="Ex: Academia"
+                  value={newItem}
+                  onChange={(e) => setNewItem(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleCreateCost();
+                    }
+                  }}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Valor (R$)</Label>
+                  <Input
+                    inputMode="decimal"
+                    placeholder="0,00"
+                    value={newAmount}
+                    onChange={(e) => setNewAmount(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Método de pagamento</Label>
+                  <select
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+                    value={newAccount}
+                    onChange={(e) => setNewAccount(e.target.value)}
+                  >
+                    {accounts.map((a) => (
+                      <option key={a} value={a}>
+                        {a}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setShowCreateForm(false);
+                    setNewItem("");
+                    setNewAmount("");
+                    setNewAccount(DEFAULT_PAYMENT_METHOD);
+                  }}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="flex-1"
+                  disabled={creating || !newItem.trim()}
+                  onClick={handleCreateCost}
+                >
+                  {creating ? "Adicionando..." : "Adicionar à lista"}
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
-        <DialogFooter>
-          <Button variant="ghost" onClick={onClose}>Cancelar</Button>
-          <Button onClick={save}>Salvar tudo</Button>
+
+        <ScrollArea className="min-h-0 flex-1 px-6">
+          <div className="py-4">
+            {sortedBills.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">
+                Nenhuma conta neste mês. Use &quot;Criar novo custo&quot; acima para adicionar.
+              </p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Item</TableHead>
+                    <TableHead className="w-32">Valor (R$)</TableHead>
+                    <TableHead className="w-20">Dia</TableHead>
+                    <TableHead className="w-36">Pagamento</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {sortedBills.map((b) =>
+                    draft[b.id] ? (
+                      <TableRow key={b.id}>
+                        <TableCell>
+                          <Input
+                            value={draft[b.id].item}
+                            onChange={(e) =>
+                              setDraft({ ...draft, [b.id]: { ...draft[b.id], item: e.target.value } })
+                            }
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            inputMode="decimal"
+                            value={draft[b.id].amount}
+                            onChange={(e) =>
+                              setDraft({ ...draft, [b.id]: { ...draft[b.id], amount: e.target.value } })
+                            }
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            type="number"
+                            min={1}
+                            max={31}
+                            value={draft[b.id].dueDay}
+                            onChange={(e) =>
+                              setDraft({ ...draft, [b.id]: { ...draft[b.id], dueDay: e.target.value } })
+                            }
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <select
+                            className="flex h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm"
+                            value={draft[b.id].account}
+                            onChange={(e) =>
+                              setDraft({ ...draft, [b.id]: { ...draft[b.id], account: e.target.value } })
+                            }
+                          >
+                            {accounts.map((a) => (
+                              <option key={a} value={a}>
+                                {a}
+                              </option>
+                            ))}
+                          </select>
+                        </TableCell>
+                      </TableRow>
+                    ) : null,
+                  )}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+        </ScrollArea>
+
+        <DialogFooter className="shrink-0 border-t border-border px-6 py-4">
+          <Button variant="ghost" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button onClick={save} disabled={sortedBills.length === 0}>
+            Salvar tudo
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

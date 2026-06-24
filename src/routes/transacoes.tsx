@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 import {
   Utensils,
   Home,
@@ -80,20 +80,11 @@ function TransacoesPage() {
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [selectedCats, setSelectedCats] = useState<Category[]>([]);
   const [selectedAccs, setSelectedAccs] = useState<Account[]>([]);
-  const [filterYear, setFilterYear] = useState<number | null>(null);
-  const [filterMonth, setFilterMonth] = useState<number | null>(null);
+  const [selectedYears, setSelectedYears] = useState<number[]>([]);
+  const [selectedMonths, setSelectedMonths] = useState<number[]>([]);
   const [open, setOpen] = useState(false);
-  const [draftYear, setDraftYear] = useState<number | null>(null);
-  const [draftMonth, setDraftMonth] = useState<number | null>(null);
   const [selected, setSelected] = useState<Transaction | null>(null);
   const [editing, setEditing] = useState<Transaction | null>(null);
-
-  useEffect(() => {
-    if (open) {
-      setDraftYear(filterYear);
-      setDraftMonth(filterMonth);
-    }
-  }, [open, filterYear, filterMonth]);
 
   const availableYears = useMemo(
     () =>
@@ -101,41 +92,32 @@ function TransacoesPage() {
     [transactions],
   );
 
-  const draftMonths = useMemo(() => {
+  const availableMonths = useMemo(() => {
     const source =
-      draftYear !== null
-        ? transactions.filter((t) => txLocalParts(t.date).year === draftYear)
+      selectedYears.length > 0
+        ? transactions.filter((t) => selectedYears.includes(txLocalParts(t.date).year))
         : transactions;
     return [...new Set(source.map((t) => txLocalParts(t.date).month))].sort((a, b) => a - b);
-  }, [transactions, draftYear]);
+  }, [transactions, selectedYears]);
 
   const toggle = <T,>(value: T, list: T[], set: (v: T[]) => void) => {
     set(list.includes(value) ? list.filter((x) => x !== value) : [...list, value]);
   };
 
-  const clearAll = () => {
-    setQuery("");
+  const clearFilterSelections = () => {
     setTypeFilter("all");
     setSelectedCats([]);
     setSelectedAccs([]);
-    setFilterYear(null);
-    setFilterMonth(null);
-    setDraftYear(null);
-    setDraftMonth(null);
-  };
-
-  const applyFilters = () => {
-    setFilterYear(draftYear);
-    setFilterMonth(draftMonth);
-    setOpen(false);
+    setSelectedYears([]);
+    setSelectedMonths([]);
   };
 
   const activeCount =
     (typeFilter !== "all" ? 1 : 0) +
     selectedCats.length +
     selectedAccs.length +
-    (filterYear !== null ? 1 : 0) +
-    (filterMonth !== null ? 1 : 0);
+    selectedYears.length +
+    selectedMonths.length;
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -145,8 +127,8 @@ function TransacoesPage() {
         if (selectedCats.length && !selectedCats.includes(t.category)) return false;
         if (selectedAccs.length && !selectedAccs.includes(t.account)) return false;
         const { year, month } = txLocalParts(t.date);
-        if (filterYear !== null && year !== filterYear) return false;
-        if (filterMonth !== null && month !== filterMonth) return false;
+        if (selectedYears.length && !selectedYears.includes(year)) return false;
+        if (selectedMonths.length && !selectedMonths.includes(month)) return false;
         if (q) {
           const hay = `${t.description ?? ""} ${t.category} ${t.account}`.toLowerCase();
           if (!hay.includes(q)) return false;
@@ -154,7 +136,7 @@ function TransacoesPage() {
         return true;
       })
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [transactions, query, typeFilter, selectedCats, selectedAccs, filterYear, filterMonth]);
+  }, [transactions, query, typeFilter, selectedCats, selectedAccs, selectedYears, selectedMonths]);
 
   return (
     <AppShell title="Transações" action={<AddTransactionDialog />}>
@@ -182,80 +164,76 @@ function TransacoesPage() {
               )}
             </button>
           </PopoverTrigger>
-          <PopoverContent align="end" className="w-72 rounded-2xl p-4">
-            <div className="space-y-4">
+          <PopoverContent align="end" className="w-72 overflow-hidden rounded-2xl p-0">
+            <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 px-3 font-semibold touch-manipulation"
+                onClick={clearFilterSelections}
+              >
+                Limpar
+              </Button>
+              <button
+                type="button"
+                aria-label="Fechar filtros"
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-md text-muted-foreground transition hover:bg-muted hover:text-foreground touch-manipulation"
+                onClick={() => setOpen(false)}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="max-h-[60vh] space-y-4 overflow-y-auto overscroll-contain p-4 touch-pan-y">
               {availableYears.length > 0 && (
                 <div>
                   <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Ano
                   </p>
                   <div className="flex flex-wrap gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDraftYear(null);
-                        setDraftMonth(null);
-                      }}
-                      className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
-                        draftYear === null
-                          ? "border-primary bg-primary text-primary-foreground"
-                          : "border-border bg-card text-foreground"
-                      }`}
-                    >
-                      Todos
-                    </button>
-                    {availableYears.map((y) => (
-                      <button
-                        key={y}
-                        type="button"
-                        onClick={() => {
-                          setDraftYear((prev) => (prev === y ? null : y));
-                          setDraftMonth(null);
-                        }}
-                        className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
-                          draftYear === y
-                            ? "border-primary bg-primary text-primary-foreground"
-                            : "border-border bg-card text-foreground"
-                        }`}
-                      >
-                        {y}
-                      </button>
-                    ))}
+                    {availableYears.map((y) => {
+                      const on = selectedYears.includes(y);
+                      return (
+                        <button
+                          key={y}
+                          type="button"
+                          onClick={() => toggle(y, selectedYears, setSelectedYears)}
+                          className={`rounded-full border px-3 py-1.5 text-xs font-medium transition touch-manipulation ${
+                            on
+                              ? "border-primary bg-primary text-primary-foreground"
+                              : "border-border bg-card text-foreground"
+                          }`}
+                        >
+                          {y}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               )}
 
-              {draftMonths.length > 0 && (
+              {availableMonths.length > 0 && (
                 <div>
                   <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Mês
                   </p>
                   <div className="flex flex-wrap gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setDraftMonth(null)}
-                      className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
-                        draftMonth === null
-                          ? "border-primary bg-primary text-primary-foreground"
-                          : "border-border bg-card text-foreground"
-                      }`}
-                    >
-                      Todos
-                    </button>
-                    {draftMonths.map((m) => (
-                      <button
-                        key={m}
-                        type="button"
-                        onClick={() => setDraftMonth((prev) => (prev === m ? null : m))}
-                        className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
-                          draftMonth === m
-                            ? "border-primary bg-primary text-primary-foreground"
-                            : "border-border bg-card text-foreground"
-                        }`}
-                      >
-                        {MONTH_NAMES[m]}
-                      </button>
-                    ))}
+                    {availableMonths.map((m) => {
+                      const on = selectedMonths.includes(m);
+                      return (
+                        <button
+                          key={m}
+                          type="button"
+                          onClick={() => toggle(m, selectedMonths, setSelectedMonths)}
+                          className={`rounded-full border px-3 py-1.5 text-xs font-medium transition touch-manipulation ${
+                            on
+                              ? "border-primary bg-primary text-primary-foreground"
+                              : "border-border bg-card text-foreground"
+                          }`}
+                        >
+                          {MONTH_NAMES[m]}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -268,8 +246,9 @@ function TransacoesPage() {
                   {(["all", "income", "expense"] as const).map((t) => (
                     <button
                       key={t}
+                      type="button"
                       onClick={() => setTypeFilter(t)}
-                      className={`rounded-lg py-1.5 text-xs font-medium transition ${
+                      className={`rounded-lg py-1.5 text-xs font-medium transition touch-manipulation ${
                         typeFilter === t
                           ? "bg-card text-foreground shadow-sm"
                           : "text-muted-foreground"
@@ -291,8 +270,9 @@ function TransacoesPage() {
                     return (
                       <button
                         key={c}
+                        type="button"
                         onClick={() => toggle(c, selectedCats, setSelectedCats)}
-                        className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+                        className={`rounded-full border px-3 py-1.5 text-xs font-medium transition touch-manipulation ${
                           on
                             ? "border-primary bg-primary text-primary-foreground"
                             : "border-border bg-card text-foreground"
@@ -315,8 +295,9 @@ function TransacoesPage() {
                     return (
                       <button
                         key={a}
+                        type="button"
                         onClick={() => toggle(a, selectedAccs, setSelectedAccs)}
-                        className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+                        className={`rounded-full border px-3 py-1.5 text-xs font-medium transition touch-manipulation ${
                           on
                             ? "border-primary bg-primary text-primary-foreground"
                             : "border-border bg-card text-foreground"
@@ -327,15 +308,6 @@ function TransacoesPage() {
                     );
                   })}
                 </div>
-              </div>
-
-              <div className="flex items-center justify-between pt-1">
-                <Button variant="ghost" size="sm" onClick={clearAll}>
-                  Limpar
-                </Button>
-                <Button size="sm" onClick={applyFilters}>
-                  Aplicar
-                </Button>
               </div>
             </div>
           </PopoverContent>
@@ -357,15 +329,20 @@ function TransacoesPage() {
               onClear={() => toggle(c, selectedCats, setSelectedCats)}
             />
           ))}
-          {filterYear !== null && (
-            <FilterChip label={String(filterYear)} onClear={() => setFilterYear(null)} />
-          )}
-          {filterMonth !== null && (
+          {selectedYears.map((y) => (
             <FilterChip
-              label={MONTH_NAMES[filterMonth]}
-              onClear={() => setFilterMonth(null)}
+              key={`y-${y}`}
+              label={String(y)}
+              onClear={() => toggle(y, selectedYears, setSelectedYears)}
             />
-          )}
+          ))}
+          {selectedMonths.map((m) => (
+            <FilterChip
+              key={`m-${m}`}
+              label={MONTH_NAMES[m]}
+              onClear={() => toggle(m, selectedMonths, setSelectedMonths)}
+            />
+          ))}
           {selectedAccs.map((a) => (
             <FilterChip
               key={a}

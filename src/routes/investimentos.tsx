@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Plus, Trash2, Landmark } from "lucide-react";
 import { AppShell } from "@/components/finance/AppShell";
+import { FAB_CLASS } from "@/components/finance/fab-styles";
 import {
   useAccountBalances,
   addAccountBalance,
@@ -44,7 +45,7 @@ function ContasPage() {
       <button
         aria-label="Adicionar conta"
         onClick={() => setCreating(true)}
-        className="fixed bottom-4 left-4 z-30 grid h-14 w-14 place-items-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30 transition-transform active:scale-95 md:left-auto md:right-8 md:bottom-8"
+        className={FAB_CLASS}
       >
         <Plus className="h-6 w-6" />
       </button>

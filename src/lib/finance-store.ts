@@ -216,7 +216,7 @@ export function addTransaction(t: Omit<Transaction, "id">) {
 export function updateTransaction(id: string, patch: Partial<Omit<Transaction, "id">>) {
   if (patch.category) addCategory(patch.category);
   if (patch.account) addAccountName(patch.account);
-  updateSupabaseTransaction(id, patch);
+  return updateSupabaseTransaction(id, patch);
 }
 export function deleteTransaction(id: string) {
   deleteSupabaseTransaction(id);

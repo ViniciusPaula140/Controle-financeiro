@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import {
   Utensils,
   Home,
@@ -23,6 +23,7 @@ import {
   useCategoriesList,
   useAccountsList,
   BRL,
+  MONTH_NAMES,
   type Category,
   type Account,
   type Transaction,
@@ -59,6 +60,11 @@ const icons: Record<Category, LucideIcon> = {
 
 type TypeFilter = "all" | "income" | "expense";
 
+function txLocalParts(iso: string) {
+  const d = new Date(iso);
+  return { year: d.getFullYear(), month: d.getMonth() };
+}
+
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
 }
@@ -72,9 +78,34 @@ function TransacoesPage() {
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [selectedCats, setSelectedCats] = useState<Category[]>([]);
   const [selectedAccs, setSelectedAccs] = useState<Account[]>([]);
+  const [filterYear, setFilterYear] = useState<number | null>(null);
+  const [filterMonth, setFilterMonth] = useState<number | null>(null);
   const [open, setOpen] = useState(false);
+  const [draftYear, setDraftYear] = useState<number | null>(null);
+  const [draftMonth, setDraftMonth] = useState<number | null>(null);
   const [selected, setSelected] = useState<Transaction | null>(null);
   const [editing, setEditing] = useState<Transaction | null>(null);
+
+  useEffect(() => {
+    if (open) {
+      setDraftYear(filterYear);
+      setDraftMonth(filterMonth);
+    }
+  }, [open, filterYear, filterMonth]);
+
+  const availableYears = useMemo(
+    () =>
+      [...new Set(transactions.map((t) => txLocalParts(t.date).year))].sort((a, b) => b - a),
+    [transactions],
+  );
+
+  const draftMonths = useMemo(() => {
+    const source =
+      draftYear !== null
+        ? transactions.filter((t) => txLocalParts(t.date).year === draftYear)
+        : transactions;
+    return [...new Set(source.map((t) => txLocalParts(t.date).month))].sort((a, b) => a - b);
+  }, [transactions, draftYear]);
 
   const toggle = <T,>(value: T, list: T[], set: (v: T[]) => void) => {
     set(list.includes(value) ? list.filter((x) => x !== value) : [...list, value]);
@@ -85,10 +116,24 @@ function TransacoesPage() {
     setTypeFilter("all");
     setSelectedCats([]);
     setSelectedAccs([]);
+    setFilterYear(null);
+    setFilterMonth(null);
+    setDraftYear(null);
+    setDraftMonth(null);
+  };
+
+  const applyFilters = () => {
+    setFilterYear(draftYear);
+    setFilterMonth(draftMonth);
+    setOpen(false);
   };
 
   const activeCount =
-    (typeFilter !== "all" ? 1 : 0) + selectedCats.length + selectedAccs.length;
+    (typeFilter !== "all" ? 1 : 0) +
+    selectedCats.length +
+    selectedAccs.length +
+    (filterYear !== null ? 1 : 0) +
+    (filterMonth !== null ? 1 : 0);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -97,6 +142,9 @@ function TransacoesPage() {
         if (typeFilter !== "all" && t.type !== typeFilter) return false;
         if (selectedCats.length && !selectedCats.includes(t.category)) return false;
         if (selectedAccs.length && !selectedAccs.includes(t.account)) return false;
+        const { year, month } = txLocalParts(t.date);
+        if (filterYear !== null && year !== filterYear) return false;
+        if (filterMonth !== null && month !== filterMonth) return false;
         if (q) {
           const hay = `${t.description ?? ""} ${t.category} ${t.account}`.toLowerCase();
           if (!hay.includes(q)) return false;
@@ -104,7 +152,7 @@ function TransacoesPage() {
         return true;
       })
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [transactions, query, typeFilter, selectedCats, selectedAccs]);
+  }, [transactions, query, typeFilter, selectedCats, selectedAccs, filterYear, filterMonth]);
 
   return (
     <AppShell title="Transações" action={<AddTransactionDialog />}>
@@ -134,6 +182,82 @@ function TransacoesPage() {
           </PopoverTrigger>
           <PopoverContent align="end" className="w-72 rounded-2xl p-4">
             <div className="space-y-4">
+              {availableYears.length > 0 && (
+                <div>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Ano
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDraftYear(null);
+                        setDraftMonth(null);
+                      }}
+                      className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+                        draftYear === null
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border bg-card text-foreground"
+                      }`}
+                    >
+                      Todos
+                    </button>
+                    {availableYears.map((y) => (
+                      <button
+                        key={y}
+                        type="button"
+                        onClick={() => {
+                          setDraftYear((prev) => (prev === y ? null : y));
+                          setDraftMonth(null);
+                        }}
+                        className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+                          draftYear === y
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-border bg-card text-foreground"
+                        }`}
+                      >
+                        {y}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {draftMonths.length > 0 && (
+                <div>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Mês
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setDraftMonth(null)}
+                      className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+                        draftMonth === null
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border bg-card text-foreground"
+                      }`}
+                    >
+                      Todos
+                    </button>
+                    {draftMonths.map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setDraftMonth((prev) => (prev === m ? null : m))}
+                        className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+                          draftMonth === m
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-border bg-card text-foreground"
+                        }`}
+                      >
+                        {MONTH_NAMES[m]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div>
                 <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Tipo
@@ -207,7 +331,7 @@ function TransacoesPage() {
                 <Button variant="ghost" size="sm" onClick={clearAll}>
                   Limpar
                 </Button>
-                <Button size="sm" onClick={() => setOpen(false)}>
+                <Button size="sm" onClick={applyFilters}>
                   Aplicar
                 </Button>
               </div>
@@ -231,6 +355,15 @@ function TransacoesPage() {
               onClear={() => toggle(c, selectedCats, setSelectedCats)}
             />
           ))}
+          {filterYear !== null && (
+            <FilterChip label={String(filterYear)} onClear={() => setFilterYear(null)} />
+          )}
+          {filterMonth !== null && (
+            <FilterChip
+              label={MONTH_NAMES[filterMonth]}
+              onClear={() => setFilterMonth(null)}
+            />
+          )}
           {selectedAccs.map((a) => (
             <FilterChip
               key={a}

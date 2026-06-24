@@ -1,5 +1,9 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Plus } from "lucide-react";
+import { toast } from "sonner";
+import { FAB_CLASS } from "@/components/finance/fab-styles";
+import { localDateInputToISO, isoToLocalDateInput, localTodayDateInput } from "@/lib/date-utils";
+import { supabaseErrorMessage } from "@/lib/supabase/realtime-utils";
 import {
   Dialog,
   DialogContent,
@@ -25,6 +29,15 @@ import {
 } from "@/lib/finance-store";
 import { CreatableSelect } from "./CreatableSelect";
 
+function sanitizeAmountInput(value: string) {
+  return value.replace(/[^\d.,]/g, "");
+}
+
+type FieldErrors = {
+  amount?: string;
+  description?: string;
+};
+
 export function AddTransactionDialog({
   trigger,
   transaction,
@@ -49,10 +62,12 @@ export function AddTransactionDialog({
   const [type, setType] = useState<"income" | "expense">("expense");
   const [category, setCategory] = useState<Category>("Alimentação");
   const [account, setAccount] = useState<Account>("Nubank");
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(() => localTodayDateInput());
   const [recurring, setRecurring] = useState(false);
   const [description, setDescription] = useState("");
   const [note, setNote] = useState("");
+  const [errors, setErrors] = useState<FieldErrors>({});
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -61,7 +76,7 @@ export function AddTransactionDialog({
       setType(transaction.type);
       setCategory(transaction.category);
       setAccount(transaction.account);
-      setDate(new Date(transaction.date).toISOString().slice(0, 10));
+      setDate(isoToLocalDateInput(transaction.date));
       setRecurring(!!transaction.recurring);
       setDescription(transaction.description ?? "");
       setNote(transaction.note ?? "");
@@ -70,30 +85,57 @@ export function AddTransactionDialog({
       setType("expense");
       setCategory("Alimentação");
       setAccount("Nubank");
-      setDate(new Date().toISOString().slice(0, 10));
+      setDate(localTodayDateInput());
       setRecurring(false);
       setDescription("");
       setNote("");
     }
+    setErrors({});
   }, [open, transaction]);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const nextErrors: FieldErrors = {};
+    const desc = description.trim();
+
+    if (!desc) {
+      nextErrors.description = "Informe uma descrição.";
+    }
+
     const value = parseFloat(amount.replace(",", "."));
-    if (!value || value <= 0) return;
-    const payload = {
-      amount: value,
-      type,
-      category,
-      account,
-      date: new Date(date).toISOString(),
-      recurring,
-      description: description || category,
-      note: note || undefined,
-    };
-    if (transaction) updateTransaction(transaction.id, payload);
-    else addTransaction(payload);
-    setOpen(false);
+    if (!amount.trim() || Number.isNaN(value)) {
+      nextErrors.amount = "Informe um valor numérico válido.";
+    } else if (value <= 0) {
+      nextErrors.amount = "O valor deve ser maior que zero.";
+    }
+
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors);
+      toast.error(Object.values(nextErrors).join(" "));
+      return;
+    }
+
+    setErrors({});
+    setSaving(true);
+    try {
+      const payload = {
+        amount: value,
+        type,
+        category,
+        account,
+        date: localDateInputToISO(date),
+        recurring,
+        description: desc,
+        note: note.trim() || undefined,
+      };
+      if (transaction) await updateTransaction(transaction.id, payload);
+      else await addTransaction(payload);
+      setOpen(false);
+    } catch (err) {
+      toast.error(supabaseErrorMessage(err));
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -103,7 +145,7 @@ export function AddTransactionDialog({
           {trigger ?? (
             <button
               aria-label="Adicionar transação"
-              className="fixed bottom-4 left-4 z-30 grid h-14 w-14 place-items-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30 transition-transform active:scale-95 md:left-auto md:right-8 md:bottom-8"
+              className={FAB_CLASS}
             >
               <Plus className="h-6 w-6" />
             </button>
@@ -145,10 +187,14 @@ export function AddTransactionDialog({
               inputMode="decimal"
               placeholder="0,00"
               value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              className="text-lg"
+              onChange={(e) => {
+                setAmount(sanitizeAmountInput(e.target.value));
+                if (errors.amount) setErrors((prev) => ({ ...prev, amount: undefined }));
+              }}
+              className={`text-lg ${errors.amount ? "border-destructive" : ""}`}
               autoFocus
             />
+            {errors.amount && <p className="text-xs text-destructive">{errors.amount}</p>}
           </div>
 
           <div className="space-y-1.5">
@@ -157,8 +203,13 @@ export function AddTransactionDialog({
               id="desc"
               placeholder="Ex: Mercado da semana"
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={(e) => {
+                setDescription(e.target.value);
+                if (errors.description) setErrors((prev) => ({ ...prev, description: undefined }));
+              }}
+              className={errors.description ? "border-destructive" : ""}
             />
+            {errors.description && <p className="text-xs text-destructive">{errors.description}</p>}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -213,8 +264,8 @@ export function AddTransactionDialog({
             Repetir mensalmente
           </label>
 
-          <Button type="submit" className="w-full" size="lg">
-            {transaction ? "Salvar alterações" : "Salvar"}
+          <Button type="submit" className="w-full" size="lg" disabled={saving}>
+            {saving ? "Salvando..." : transaction ? "Salvar alterações" : "Salvar"}
           </Button>
         </form>
       </DialogContent>

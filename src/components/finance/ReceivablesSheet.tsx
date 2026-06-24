@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Plus, Pencil, Trash2, Inbox } from "lucide-react";
+import { Plus, Pencil, Trash2, Inbox, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   Sheet,
@@ -43,6 +43,7 @@ export function ReceivablesSheet() {
   const items = useReceivables();
   const [editing, setEditing] = useState<Receivable | null>(null);
   const [creating, setCreating] = useState(false);
+  const [isProcessing, setIsProcessing] = useState<string | null>(null);
 
   const grouped = useMemo(() => {
     const map = new Map<number, Map<number, Receivable[]>>();
@@ -63,6 +64,8 @@ export function ReceivablesSheet() {
   );
 
   const handleToggleReceived = async (r: Receivable, received: boolean) => {
+    if (isProcessing !== null) return;
+    setIsProcessing(r.id);
     try {
       await markReceivableReceived(r, received);
       if (received) {
@@ -72,19 +75,25 @@ export function ReceivablesSheet() {
       }
     } catch (err) {
       toast.error(supabaseErrorMessage(err));
+    } finally {
+      setIsProcessing(null);
     }
   };
 
   const handleDelete = async (r: Receivable) => {
+    if (isProcessing !== null) return;
     if (r.received) {
       toast.error(RECEIVABLE_ALREADY_RECEIVED_DELETE_MSG);
       return;
     }
+    setIsProcessing(r.id);
     try {
       await deleteReceivable(r.id);
       toast.success("Recebível excluído");
     } catch (err) {
       toast.error(supabaseErrorMessage(err));
+    } finally {
+      setIsProcessing(null);
     }
   };
 
@@ -110,7 +119,7 @@ export function ReceivablesSheet() {
       </TooltipProvider>
       <SheetContent side="right" className="w-full max-w-md overflow-y-auto p-0">
         <SheetHeader className="border-b border-border p-5 text-left">
-          <SheetTitle>Dinheiro a Receber</SheetTitle>
+          <SheetTitle>Dinheiro a receber</SheetTitle>
           <p className="text-xs text-muted-foreground">
             Pendente: <span className="font-semibold text-primary">{BRL(totalPending)}</span>
           </p>
@@ -147,12 +156,15 @@ export function ReceivablesSheet() {
                                 key={r.id}
                                 className="flex items-center gap-2 rounded-xl border border-border bg-card p-3"
                               >
-                                {r.received && r.receivedAt ? (
+                                {isProcessing === r.id ? (
+                                  <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" />
+                                ) : r.received && r.receivedAt ? (
                                   <Tooltip>
                                     <TooltipTrigger asChild>
                                       <span>
                                         <Checkbox
                                           checked
+                                          disabled={isProcessing !== null}
                                           onCheckedChange={(v) => handleToggleReceived(r, v === true)}
                                         />
                                       </span>
@@ -165,6 +177,7 @@ export function ReceivablesSheet() {
                                 ) : (
                                   <Checkbox
                                     checked={r.received}
+                                    disabled={isProcessing !== null}
                                     onCheckedChange={(v) => handleToggleReceived(r, v === true)}
                                   />
                                 )}
@@ -180,16 +193,17 @@ export function ReceivablesSheet() {
                                 </div>
                                 <button
                                   onClick={() => setEditing(r)}
+                                  disabled={isProcessing !== null}
                                   aria-label="Editar"
-                                  className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-accent"
+                                  className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-accent disabled:pointer-events-none disabled:opacity-50"
                                 >
                                   <Pencil className="h-4 w-4" />
                                 </button>
                                 <button
                                   onClick={() => handleDelete(r)}
-                                  disabled={r.received}
+                                  disabled={r.received || isProcessing !== null}
                                   aria-label="Excluir"
-                                  className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-destructive hover:bg-destructive/10"
+                                  className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-destructive hover:bg-destructive/10 disabled:pointer-events-none disabled:opacity-50"
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </button>

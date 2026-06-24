@@ -4,7 +4,7 @@ import { NAV_ITEMS } from "./nav-items";
 
 export function SideNav() {
   return (
-    <aside className="sticky top-0 hidden h-screen w-56 shrink-0 flex-col border-r border-border bg-card/50 lg:flex">
+    <aside className="fixed left-0 top-0 z-40 hidden h-screen w-56 flex-col border-r border-border bg-card/50 lg:flex">
       <div className="flex items-center gap-2.5 border-b border-border px-5 py-6">
         <div className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-primary to-emerald-600 text-primary-foreground">
           <Wallet className="h-4 w-4" />

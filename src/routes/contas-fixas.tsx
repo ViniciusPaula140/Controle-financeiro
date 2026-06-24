@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Plus, Pencil, Trash2, Copy, CheckSquare, X, SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/finance/AppShell";
+import { FAB_CLASS } from "@/components/finance/fab-styles";
 import {
   useFixedBills,
   addFixedBill,
@@ -358,6 +359,7 @@ function ContasFixasPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [filters, setFilters] = useState<FixedBillFilters>(DEFAULT_FIXED_BILL_FILTERS);
+  const [processingBillId, setProcessingBillId] = useState<string | null>(null);
 
   const grouped = useMemo(() => {
     const map = new Map<number, Map<number, FixedBill[]>>();
@@ -375,12 +377,16 @@ function ContasFixasPage() {
   const yearKeys = useMemo(() => [...grouped.keys()], [grouped]);
 
   const handleMarkPaid = async (bill: FixedBill, paid: boolean) => {
+    if (processingBillId !== null) return;
+    setProcessingBillId(bill.id);
     try {
       await markFixedBillPaid(bill, paid);
       if (paid) toast.success(`${bill.item} marcado como pago`);
       else toast.success(`${bill.item} desmarcado`);
     } catch (err) {
       toast.error(supabaseErrorMessage(err));
+    } finally {
+      setProcessingBillId(null);
     }
   };
 
@@ -391,7 +397,7 @@ function ContasFixasPage() {
       <button
         aria-label="Adicionar conta fixa"
         onClick={() => setCreating(true)}
-        className="fixed bottom-4 left-4 z-30 grid h-14 w-14 place-items-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30 transition-transform active:scale-95 md:left-auto md:right-8 md:bottom-8"
+        className={FAB_CLASS}
       >
         <Plus className="h-6 w-6" />
       </button>
@@ -558,6 +564,7 @@ function ContasFixasPage() {
                                               <span>
                                                 <Checkbox
                                                   checked
+                                                  disabled={processingBillId !== null}
                                                   onCheckedChange={(v) => handleMarkPaid(b, v === true)}
                                                 />
                                               </span>
@@ -569,6 +576,7 @@ function ContasFixasPage() {
                                         ) : (
                                           <Checkbox
                                             checked={b.paid}
+                                            disabled={processingBillId !== null}
                                             onCheckedChange={(v) => handleMarkPaid(b, v === true)}
                                           />
                                         )}

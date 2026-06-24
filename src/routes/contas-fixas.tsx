@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Pencil, Trash2, Copy, CheckSquare, X } from "lucide-react";
+import { Plus, Pencil, Trash2, Copy, CheckSquare, X, SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/finance/AppShell";
 import {
@@ -49,6 +49,8 @@ import {
 } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 export const Route = createFileRoute("/contas-fixas")({
   head: () => ({ meta: [{ title: "Contas Fixas" }] }),
@@ -62,6 +64,290 @@ function paymentLabel(bill: FixedBill) {
   return bill.account?.trim() || DEFAULT_PAYMENT_METHOD;
 }
 
+type SituationFilter = "all" | "vencidos" | "a_vencer";
+type PaymentFilter = "all" | "pago" | "pendente";
+type SeparationFilter = "all" | "separado" | "nao_separado";
+
+type FixedBillFilters = {
+  situation: SituationFilter;
+  payment: PaymentFilter;
+  separation: SeparationFilter;
+  paymentMethods: string[];
+};
+
+const DEFAULT_FIXED_BILL_FILTERS: FixedBillFilters = {
+  situation: "all",
+  payment: "all",
+  separation: "all",
+  paymentMethods: [],
+};
+
+function startOfDay(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+function getDueDate(bill: FixedBill) {
+  const lastDay = new Date(bill.year, bill.month + 1, 0).getDate();
+  const day = Math.min(Math.max(1, bill.dueDay), lastDay);
+  return new Date(bill.year, bill.month, day);
+}
+
+function daysUntilDue(bill: FixedBill) {
+  const due = startOfDay(getDueDate(bill));
+  const today = startOfDay(new Date());
+  return Math.round((due.getTime() - today.getTime()) / 86_400_000);
+}
+
+function isBillOverdue(bill: FixedBill) {
+  return !bill.paid && daysUntilDue(bill) < 0;
+}
+
+function isBillUpcoming(bill: FixedBill) {
+  return !bill.paid && daysUntilDue(bill) >= 0;
+}
+
+function applyFixedBillFilters(list: FixedBill[], filters: FixedBillFilters) {
+  return list
+    .filter((bill) => {
+      if (filters.situation === "vencidos" && !isBillOverdue(bill)) return false;
+      if (filters.situation === "a_vencer" && !isBillUpcoming(bill)) return false;
+      if (filters.payment === "pago" && !bill.paid) return false;
+      if (filters.payment === "pendente" && bill.paid) return false;
+      if (filters.separation === "separado" && bill.separated !== "ok") return false;
+      if (filters.separation === "nao_separado" && bill.separated !== "pendente") return false;
+      if (
+        filters.paymentMethods.length > 0 &&
+        !filters.paymentMethods.includes(paymentLabel(bill))
+      ) {
+        return false;
+      }
+      return true;
+    })
+    .sort((a, b) => a.item.localeCompare(b.item, "pt-BR"));
+}
+
+function countActiveFilters(filters: FixedBillFilters) {
+  return (
+    (filters.situation !== "all" ? 1 : 0) +
+    (filters.payment !== "all" ? 1 : 0) +
+    (filters.separation !== "all" ? 1 : 0) +
+    filters.paymentMethods.length
+  );
+}
+
+function FixedBillStatusBadge({ bill }: { bill: FixedBill }) {
+  if (bill.paid) {
+    return (
+      <Badge className="rounded-full border-emerald-200 bg-emerald-50 px-2 py-0 text-[10px] font-semibold text-emerald-700 hover:bg-emerald-50">
+        Pago
+      </Badge>
+    );
+  }
+
+  const diff = daysUntilDue(bill);
+
+  if (diff < 0) {
+    return (
+      <Badge
+        variant="destructive"
+        className="rounded-full px-2 py-0 text-[10px] font-semibold hover:bg-destructive"
+      >
+        Vencido
+      </Badge>
+    );
+  }
+
+  if (diff === 0) {
+    return (
+      <Badge className="rounded-full border-orange-200 bg-orange-50 px-2 py-0 text-[10px] font-semibold text-orange-700 hover:bg-orange-50">
+        Vence hoje
+      </Badge>
+    );
+  }
+
+  return (
+    <Badge className="rounded-full border-amber-200 bg-amber-50 px-2 py-0 text-[10px] font-semibold text-amber-800 hover:bg-amber-50">
+      Vence em {diff} dias
+    </Badge>
+  );
+}
+
+function FixedBillsFiltersPopover({
+  paymentMethods,
+  filters,
+  onChange,
+}: {
+  paymentMethods: string[];
+  filters: FixedBillFilters;
+  onChange: (filters: FixedBillFilters) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState<FixedBillFilters>(filters);
+
+  useEffect(() => {
+    if (open) setDraft(filters);
+  }, [open, filters]);
+
+  const toggleMethod = (method: string) => {
+    setDraft((prev) => ({
+      ...prev,
+      paymentMethods: prev.paymentMethods.includes(method)
+        ? prev.paymentMethods.filter((m) => m !== method)
+        : [...prev.paymentMethods, method],
+    }));
+  };
+
+  const clearAll = () => {
+    setDraft(DEFAULT_FIXED_BILL_FILTERS);
+    onChange(DEFAULT_FIXED_BILL_FILTERS);
+  };
+
+  const apply = () => {
+    onChange(draft);
+    setOpen(false);
+  };
+
+  const activeCount = countActiveFilters(filters);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button size="sm" variant="outline" className="relative">
+          <SlidersHorizontal className="h-3.5 w-3.5" /> Filtros
+          {activeCount > 0 && (
+            <span className="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
+              {activeCount}
+            </span>
+          )}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-72 rounded-2xl p-4">
+        <div className="space-y-4">
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Situação
+            </p>
+            <div className="grid grid-cols-3 gap-1 rounded-xl bg-muted p-1">
+              {(
+                [
+                  ["all", "Todos"],
+                  ["vencidos", "Vencidos"],
+                  ["a_vencer", "À vencer"],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setDraft((prev) => ({ ...prev, situation: value }))}
+                  className={`rounded-lg py-1.5 text-xs font-medium transition ${
+                    draft.situation === value
+                      ? "bg-card text-foreground shadow-sm"
+                      : "text-muted-foreground"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Pagamento
+            </p>
+            <div className="grid grid-cols-3 gap-1 rounded-xl bg-muted p-1">
+              {(
+                [
+                  ["all", "Todos"],
+                  ["pago", "Pago"],
+                  ["pendente", "Pendente"],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setDraft((prev) => ({ ...prev, payment: value }))}
+                  className={`rounded-lg py-1.5 text-xs font-medium transition ${
+                    draft.payment === value
+                      ? "bg-card text-foreground shadow-sm"
+                      : "text-muted-foreground"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Separação
+            </p>
+            <div className="grid grid-cols-3 gap-1 rounded-xl bg-muted p-1">
+              {(
+                [
+                  ["all", "Todos"],
+                  ["separado", "Separado"],
+                  ["nao_separado", "Não separado"],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setDraft((prev) => ({ ...prev, separation: value }))}
+                  className={`rounded-lg py-1.5 text-xs font-medium transition ${
+                    draft.separation === value
+                      ? "bg-card text-foreground shadow-sm"
+                      : "text-muted-foreground"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {paymentMethods.length > 0 && (
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Método / Conta
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {paymentMethods.map((method) => {
+                  const on = draft.paymentMethods.includes(method);
+                  return (
+                    <button
+                      key={method}
+                      type="button"
+                      onClick={() => toggleMethod(method)}
+                      className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+                        on
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border bg-card text-foreground"
+                      }`}
+                    >
+                      {method}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between pt-1">
+            <Button variant="ghost" size="sm" onClick={clearAll}>
+              Limpar
+            </Button>
+            <Button size="sm" onClick={apply}>
+              Aplicar
+            </Button>
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function ContasFixasPage() {
   const bills = useFixedBills();
   const accounts = useAccountsList();
@@ -71,11 +357,12 @@ function ContasFixasPage() {
   const [deleteMode, setDeleteMode] = useState<MonthKey | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [filters, setFilters] = useState<FixedBillFilters>(DEFAULT_FIXED_BILL_FILTERS);
 
   const grouped = useMemo(() => {
     const map = new Map<number, Map<number, FixedBill[]>>();
     [...bills]
-      .sort((a, b) => b.year - a.year || b.month - a.month || a.dueDay - b.dueDay)
+      .sort((a, b) => b.year - a.year || b.month - a.month || a.item.localeCompare(b.item, "pt-BR"))
       .forEach((b) => {
         if (!map.has(b.year)) map.set(b.year, new Map());
         const ym = map.get(b.year)!;
@@ -125,9 +412,13 @@ function ContasFixasPage() {
                 <AccordionContent>
                   <Accordion type="multiple" defaultValue={[...ym.keys()].slice(0, 1).map(String)}>
                     {[...ym.entries()].map(([m, list]) => {
-                      const total = list.reduce((s, b) => s + (b.amount ?? 0), 0);
                       const key = mkKey(year, m);
                       const isDeleting = deleteMode === key;
+                      const monthPaymentMethods = [
+                        ...new Set(list.map((b) => paymentLabel(b))),
+                      ].sort((a, b) => a.localeCompare(b, "pt-BR"));
+                      const filteredList = applyFixedBillFilters(list, filters);
+                      const total = filteredList.reduce((s, b) => s + (b.amount ?? 0), 0);
                       return (
                         <AccordionItem key={m} value={String(m)} className="border-none">
                           <AccordionTrigger className="px-2 py-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground no-underline hover:no-underline">
@@ -137,6 +428,11 @@ function ContasFixasPage() {
                           </AccordionTrigger>
                           <AccordionContent>
                             <div className="mb-3 flex flex-wrap items-center gap-2">
+                              <FixedBillsFiltersPopover
+                                paymentMethods={monthPaymentMethods}
+                                filters={filters}
+                                onChange={setFilters}
+                              />
                               <Button size="sm" variant="outline" onClick={() => setBulkEdit({ monthKey: key })}>
                                 <Pencil className="h-3.5 w-3.5" /> Editar valores
                               </Button>
@@ -162,12 +458,16 @@ function ContasFixasPage() {
                                     variant="secondary"
                                     onClick={() =>
                                       setSelectedIds(
-                                        selectedIds.length === list.length ? [] : list.map((b) => b.id),
+                                        selectedIds.length === filteredList.length
+                                          ? []
+                                          : filteredList.map((b) => b.id),
                                       )
                                     }
                                   >
                                     <CheckSquare className="h-3.5 w-3.5" />
-                                    {selectedIds.length === list.length ? "Desmarcar tudo" : "Selecionar tudo"}
+                                    {selectedIds.length === filteredList.length && filteredList.length > 0
+                                      ? "Desmarcar tudo"
+                                      : "Selecionar tudo"}
                                   </Button>
                                   <Button
                                     size="sm"
@@ -195,6 +495,7 @@ function ContasFixasPage() {
                                     <TableHead>Item</TableHead>
                                     <TableHead className="text-right">Valor</TableHead>
                                     <TableHead className="text-center">Vence</TableHead>
+                                    <TableHead className="text-center">Status</TableHead>
                                     <TableHead className="text-center">Sep.</TableHead>
                                     <TableHead className="text-center">Pago</TableHead>
                                     <TableHead>Pagamento</TableHead>
@@ -202,7 +503,17 @@ function ContasFixasPage() {
                                   </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                  {list.map((b) => (
+                                  {filteredList.length === 0 ? (
+                                    <TableRow>
+                                      <TableCell
+                                        colSpan={isDeleting ? 9 : 8}
+                                        className="py-8 text-center text-sm text-muted-foreground"
+                                      >
+                                        Nenhuma conta corresponde aos filtros selecionados.
+                                      </TableCell>
+                                    </TableRow>
+                                  ) : (
+                                    filteredList.map((b) => (
                                     <TableRow
                                       key={b.id}
                                       className={b.paid ? "bg-primary/5" : "bg-destructive/5"}
@@ -227,6 +538,9 @@ function ContasFixasPage() {
                                       </TableCell>
                                       <TableCell className="text-center text-xs text-muted-foreground">
                                         dia {String(b.dueDay).padStart(2, "0")}
+                                      </TableCell>
+                                      <TableCell className="text-center">
+                                        <FixedBillStatusBadge bill={b} />
                                       </TableCell>
                                       <TableCell className="text-center">
                                         <span
@@ -272,15 +586,18 @@ function ContasFixasPage() {
                                         </button>
                                       </TableCell>
                                     </TableRow>
-                                  ))}
+                                  ))
+                                  )}
+                                  {filteredList.length > 0 && (
                                   <TableRow className="bg-muted/40">
                                     {isDeleting && <TableCell />}
                                     <TableCell className="text-xs font-semibold uppercase text-muted-foreground">
                                       Total custo fixo
                                     </TableCell>
                                     <TableCell className="text-right font-bold">{BRL(total)}</TableCell>
-                                    <TableCell colSpan={5} />
+                                    <TableCell colSpan={6} />
                                   </TableRow>
+                                  )}
                                 </TableBody>
                               </Table>
                             </div>

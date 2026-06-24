@@ -23,6 +23,7 @@ import {
   type Account,
 } from "@/lib/finance-store";
 import { supabaseErrorMessage } from "@/lib/supabase/realtime-utils";
+import { sanitizeAmountInput } from "@/lib/amount-input";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -903,7 +904,7 @@ function EditFixedBillDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Valor (R$)</Label>
-              <Input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
+              <Input inputMode="decimal" value={amount} onChange={(e) => setAmount(sanitizeAmountInput(e.target.value))} />
             </div>
             <div className="space-y-1.5">
               <Label>Dia venc.</Label>
@@ -1109,7 +1110,7 @@ function BulkEditDialog({
                     inputMode="decimal"
                     placeholder="0,00"
                     value={newAmount}
-                    onChange={(e) => setNewAmount(e.target.value)}
+                    onChange={(e) => setNewAmount(sanitizeAmountInput(e.target.value))}
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -1188,7 +1189,10 @@ function BulkEditDialog({
                             inputMode="decimal"
                             value={draft[b.id].amount}
                             onChange={(e) =>
-                              setDraft({ ...draft, [b.id]: { ...draft[b.id], amount: e.target.value } })
+                              setDraft({
+                                ...draft,
+                                [b.id]: { ...draft[b.id], amount: sanitizeAmountInput(e.target.value) },
+                              })
                             }
                           />
                         </TableCell>

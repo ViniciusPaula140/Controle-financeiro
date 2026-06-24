@@ -162,14 +162,14 @@ export function addBudget(b: Omit<Budget, "id">) {
   const cat = b.category.trim();
   if (!cat) return;
   addCategory(cat);
-  addSupabaseBudget(b);
+  return addSupabaseBudget(b);
 }
 export function updateBudget(id: string, patch: Partial<Omit<Budget, "id">>) {
   if (patch.category) addCategory(patch.category);
-  updateSupabaseBudget(id, patch);
+  return updateSupabaseBudget(id, patch);
 }
 export function deleteBudget(id: string) {
-  deleteSupabaseBudget(id);
+  return deleteSupabaseBudget(id);
 }
 /** @deprecated use useBudgets() */
 export const budgets = budgetsList;
@@ -219,7 +219,7 @@ export function updateTransaction(id: string, patch: Partial<Omit<Transaction, "
   return updateSupabaseTransaction(id, patch);
 }
 export function deleteTransaction(id: string) {
-  deleteSupabaseTransaction(id);
+  return deleteSupabaseTransaction(id);
 }
 
 const accListeners = new Set<() => void>();
@@ -235,14 +235,14 @@ export function useAccountBalances() {
 }
 export function addAccountBalance(a: Omit<AccountBalance, "id">) {
   if (a.account) addAccountName(a.account);
-  addSupabaseAccountBalance(a);
+  return addSupabaseAccountBalance(a);
 }
 export function updateAccountBalance(id: string, patch: Partial<Omit<AccountBalance, "id">>) {
   if (patch.account) addAccountName(patch.account);
-  updateSupabaseAccountBalance(id, patch);
+  return updateSupabaseAccountBalance(id, patch);
 }
 export function deleteAccountBalance(id: string) {
-  deleteSupabaseAccountBalance(id);
+  return deleteSupabaseAccountBalance(id);
 }
 
 export { accountBalances };
@@ -298,13 +298,13 @@ export function useGoals() {
   return goals ?? [];
 }
 export function addGoal(g: Omit<Goal, "id">) {
-  addSupabaseGoal(g);
+  return addSupabaseGoal(g);
 }
 export function updateGoal(id: string, patch: Partial<Omit<Goal, "id">>) {
-  updateSupabaseGoal(id, patch);
+  return updateSupabaseGoal(id, patch);
 }
 export function deleteGoal(id: string) {
-  deleteSupabaseGoal(id);
+  return deleteSupabaseGoal(id);
 }
 
 // ---------- Fixed Bills ----------

@@ -17,6 +17,8 @@ import {
 } from "lucide-react";
 import { AppShell } from "@/components/finance/AppShell";
 import { AddTransactionDialog } from "@/components/finance/AddTransactionDialog";
+import { toast } from "sonner";
+import { supabaseErrorMessage } from "@/lib/supabase/realtime-utils";
 import {
   useTransactions,
   deleteTransaction,
@@ -425,9 +427,14 @@ function TransacoesPage() {
           setSelected(null);
           setEditing(t);
         }}
-        onDelete={(t) => {
-          deleteTransaction(t.id);
-          setSelected(null);
+        onDelete={async (t) => {
+          try {
+            await deleteTransaction(t.id);
+            toast.success("Transação excluída com sucesso");
+            setSelected(null);
+          } catch (err) {
+            toast.error(supabaseErrorMessage(err));
+          }
         }}
       />
 

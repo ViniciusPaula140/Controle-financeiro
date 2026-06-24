@@ -38,6 +38,7 @@ import {
 } from "@/lib/finance-store";
 import { supabaseErrorMessage } from "@/lib/supabase/realtime-utils";
 import { RECEIVABLE_ALREADY_RECEIVED_DELETE_MSG } from "@/lib/supabase/receivables";
+import { sanitizeAmountInput } from "@/lib/amount-input";
 
 export function ReceivablesSheet() {
   const items = useReceivables();
@@ -69,9 +70,9 @@ export function ReceivablesSheet() {
     try {
       await markReceivableReceived(r, received);
       if (received) {
-        toast.success(`Recebimento registrado: ${r.name}`);
+        toast.success(`Recebimento registrado: ${r.name}`, { closeButton: true });
       } else {
-        toast.success(`Recebimento desmarcado: ${r.name}`);
+        toast.success(`Recebimento desmarcado: ${r.name}`, { closeButton: true });
       }
     } catch (err) {
       toast.error(supabaseErrorMessage(err));
@@ -89,7 +90,7 @@ export function ReceivablesSheet() {
     setIsProcessing(r.id);
     try {
       await deleteReceivable(r.id);
-      toast.success("Recebível excluído");
+      toast.success("Recebível excluído com sucesso");
     } catch (err) {
       toast.error(supabaseErrorMessage(err));
     } finally {
@@ -229,7 +230,7 @@ export function ReceivablesSheet() {
             try {
               await addReceivable(d);
               setCreating(false);
-              toast.success("Recebimento adicionado");
+              toast.success("Recebimento criado com sucesso");
             } catch (err) {
               toast.error(supabaseErrorMessage(err));
             }
@@ -245,7 +246,7 @@ export function ReceivablesSheet() {
             try {
               await updateReceivable(editing.id, d);
               setEditing(null);
-              toast.success("Recebimento atualizado");
+              toast.success("Recebimento atualizado com sucesso");
             } catch (err) {
               toast.error(supabaseErrorMessage(err));
             }
@@ -307,7 +308,7 @@ function ReceivableDialog({
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="ramt">Valor (R$)</Label>
-            <Input id="ramt" inputMode="decimal" placeholder="0,00" value={amount} onChange={(e) => setAmount(e.target.value)} />
+            <Input id="ramt" inputMode="decimal" placeholder="0,00" value={amount} onChange={(e) => setAmount(sanitizeAmountInput(e.target.value))} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">

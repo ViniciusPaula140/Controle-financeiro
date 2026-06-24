@@ -1,9 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Plus, Pencil, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { AppShell } from "@/components/finance/AppShell";
 import { FAB_CLASS } from "@/components/finance/fab-styles";
 import { CreatableSelect } from "@/components/finance/CreatableSelect";
+import { sanitizeAmountInput } from "@/lib/amount-input";
+import { supabaseErrorMessage } from "@/lib/supabase/realtime-utils";
 import {
   useTransactions,
   useBudgets,
@@ -110,7 +113,14 @@ function OrcamentosPage() {
                       <Pencil className="h-4 w-4" />
                     </button>
                     <button
-                      onClick={() => deleteBudget(b.id)}
+                      onClick={async () => {
+                        try {
+                          await deleteBudget(b.id);
+                          toast.success("Orçamento excluído com sucesso");
+                        } catch (err) {
+                          toast.error(supabaseErrorMessage(err));
+                        }
+                      }}
                       aria-label="Excluir"
                       className="grid h-8 w-8 place-items-center rounded-md text-destructive hover:bg-destructive/10"
                     >
@@ -134,9 +144,14 @@ function OrcamentosPage() {
       <BudgetDialog
         open={creating}
         onOpenChange={setCreating}
-        onSubmit={(d) => {
-          addBudget(d);
-          setCreating(false);
+        onSubmit={async (d) => {
+          try {
+            await addBudget(d);
+            toast.success("Orçamento criado com sucesso");
+            setCreating(false);
+          } catch (err) {
+            toast.error(supabaseErrorMessage(err));
+          }
         }}
       />
       <BudgetDialog
@@ -144,9 +159,15 @@ function OrcamentosPage() {
         open={!!editing}
         onOpenChange={(v) => !v && setEditing(null)}
         initial={editing ?? undefined}
-        onSubmit={(d) => {
-          if (editing) updateBudget(editing.id, d);
-          setEditing(null);
+        onSubmit={async (d) => {
+          if (!editing) return;
+          try {
+            await updateBudget(editing.id, d);
+            toast.success("Orçamento atualizado com sucesso");
+            setEditing(null);
+          } catch (err) {
+            toast.error(supabaseErrorMessage(err));
+          }
         }}
       />
     </AppShell>
@@ -179,8 +200,12 @@ function BudgetDialog({
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     const v = parseFloat(limit.replace(",", "."));
-    if (!category.trim() || !v) return;
-    onSubmit({ category: category.trim(), limit: v, name: name.trim() || undefined });
+    if (!name.trim() || !limit.trim() || Number.isNaN(v) || v <= 0) {
+      toast.error("Os campos de Nome do orçamento e Valor devem conter valores válidos.");
+      return;
+    }
+    if (!category.trim()) return;
+    onSubmit({ category: category.trim(), limit: v, name: name.trim() });
   };
 
   return (
@@ -191,7 +216,7 @@ function BudgetDialog({
         </DialogHeader>
         <form onSubmit={submit} className="space-y-3">
           <div className="space-y-1.5">
-            <Label htmlFor="bname">Nomenclatura</Label>
+            <Label htmlFor="bname">Nome do orçamento</Label>
             <Input
               id="bname"
               placeholder="Ex: Mercado do mês"
@@ -220,7 +245,7 @@ function BudgetDialog({
               inputMode="decimal"
               placeholder="0,00"
               value={limit}
-              onChange={(e) => setLimit(e.target.value)}
+              onChange={(e) => setLimit(sanitizeAmountInput(e.target.value))}
             />
           </div>
           <DialogFooter>

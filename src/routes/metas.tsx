@@ -1,9 +1,12 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { Plus, Pencil, Trash2, Trophy } from "lucide-react";
+import { toast } from "sonner";
 import { z } from "zod";
 import { AppShell } from "@/components/finance/AppShell";
 import { FAB_CLASS } from "@/components/finance/fab-styles";
+import { sanitizeAmountInput } from "@/lib/amount-input";
+import { supabaseErrorMessage } from "@/lib/supabase/realtime-utils";
 import {
   useGoals,
   addGoal,
@@ -100,7 +103,18 @@ function MetasPage() {
                       <button onClick={() => setEditing(g)} aria-label="Editar" className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground hover:bg-accent">
                         <Pencil className="h-4 w-4" />
                       </button>
-                      <button onClick={() => deleteGoal(g.id)} aria-label="Excluir" className="grid h-8 w-8 place-items-center rounded-md text-destructive hover:bg-destructive/10">
+                      <button
+                        onClick={async () => {
+                          try {
+                            await deleteGoal(g.id);
+                            toast.success("Meta excluída com sucesso");
+                          } catch (err) {
+                            toast.error(supabaseErrorMessage(err));
+                          }
+                        }}
+                        aria-label="Excluir"
+                        className="grid h-8 w-8 place-items-center rounded-md text-destructive hover:bg-destructive/10"
+                      >
                         <Trash2 className="h-4 w-4" />
                       </button>
                     </li>
@@ -114,16 +128,31 @@ function MetasPage() {
           open={creating}
           onOpenChange={(v) => { setCreating(v); if (!v) setEditing(null); }}
           initial={editing && editing.id === "__new__" ? editing : undefined}
-          onSubmit={(d) => { addGoal(d); setCreating(false); setEditing(null); }}
+          onSubmit={async (d) => {
+            try {
+              await addGoal(d);
+              toast.success("Meta criada com sucesso");
+              setCreating(false);
+              setEditing(null);
+            } catch (err) {
+              toast.error(supabaseErrorMessage(err));
+            }
+          }}
         />
         <GoalDialog
           key={editing?.id ?? "none-edit"}
           open={!!editing && editing.id !== "__new__"}
           onOpenChange={(v) => !v && setEditing(null)}
           initial={editing && editing.id !== "__new__" ? editing : undefined}
-          onSubmit={(d) => {
-            if (editing && editing.id !== "__new__") updateGoal(editing.id, d);
-            setEditing(null);
+          onSubmit={async (d) => {
+            if (!editing || editing.id === "__new__") return;
+            try {
+              await updateGoal(editing.id, d);
+              toast.success("Meta atualizada com sucesso");
+              setEditing(null);
+            } catch (err) {
+              toast.error(supabaseErrorMessage(err));
+            }
           }}
         />
       </AppShell>
@@ -161,8 +190,11 @@ function GoalDialog({
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     const v = parseFloat(amount.replace(",", "."));
-    if (!v) return;
-    onSubmit({ year, month, amount: v, note: note || undefined });
+    if (!amount.trim() || Number.isNaN(v) || v <= 0) {
+      toast.error("Preencha todos os campos obrigatórios com valores válidos para criar a meta.");
+      return;
+    }
+    onSubmit({ year, month, amount: v, note: note.trim() || undefined });
   };
 
   return (
@@ -190,7 +222,7 @@ function GoalDialog({
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="gamt">Valor da meta (R$)</Label>
-            <Input id="gamt" inputMode="decimal" placeholder="0,00" value={amount} onChange={(e) => setAmount(e.target.value)} autoFocus />
+            <Input id="gamt" inputMode="decimal" placeholder="0,00" value={amount} onChange={(e) => setAmount(sanitizeAmountInput(e.target.value))} autoFocus />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="gnote">Observação</Label>

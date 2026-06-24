@@ -19,6 +19,18 @@ import {
   BRL,
 } from "@/lib/finance-store";
 import { useAuth } from "@/lib/supabase/auth-context";
+import {
+  formatFixedBillDueDate,
+  getFixedBillDueDate,
+  startOfDay,
+} from "@/lib/fixed-bill-dates";
+
+type NotificationItem = {
+  id: string;
+  title?: string;
+  text: string;
+  tone: "warn" | "danger";
+};
 
 export function UserMenu() {
   const bills = useFixedBills();
@@ -30,13 +42,25 @@ export function UserMenu() {
   const { signOut, user } = useAuth();
 
   const notifications = useMemo(() => {
-    const items: { id: string; text: string; tone: "warn" | "danger" }[] = [];
-    const today = new Date();
-    const limit = new Date();
+    const items: NotificationItem[] = [];
+    const today = startOfDay(new Date());
+    const limit = new Date(today);
     limit.setDate(today.getDate() + alerts.daysBefore);
+
     bills.forEach((b) => {
       if (b.paid) return;
-      const due = new Date(b.year, b.month, b.dueDay);
+      const due = startOfDay(getFixedBillDueDate(b));
+
+      if (due < today) {
+        items.push({
+          id: `overdue-${b.id}`,
+          title: "Conta Vencida!",
+          text: `A conta "${b.item}" venceu dia ${formatFixedBillDueDate(b)}`,
+          tone: "danger",
+        });
+        return;
+      }
+
       if (due >= today && due <= limit) {
         const days = Math.max(0, Math.ceil((due.getTime() - today.getTime()) / 86400000));
         items.push({
@@ -112,7 +136,14 @@ export function UserMenu() {
               {notifications.map((n) => (
                 <div key={n.id} className="flex items-start gap-2 px-2 py-2 text-xs">
                   <AlertCircle className={`mt-0.5 h-4 w-4 shrink-0 ${n.tone === "danger" ? "text-destructive" : "text-amber-600"}`} />
-                  <span className="text-foreground">{n.text}</span>
+                  <div className="min-w-0">
+                    {n.title && (
+                      <p className={`font-semibold ${n.tone === "danger" ? "text-destructive" : "text-foreground"}`}>
+                        {n.title}
+                      </p>
+                    )}
+                    <p className="text-foreground">{n.text}</p>
+                  </div>
                 </div>
               ))}
             </div>

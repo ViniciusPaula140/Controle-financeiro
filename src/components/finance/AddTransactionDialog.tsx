@@ -28,10 +28,7 @@ import {
   type Transaction,
 } from "@/lib/finance-store";
 import { CreatableSelect } from "./CreatableSelect";
-
-function sanitizeAmountInput(value: string) {
-  return value.replace(/[^\d.,]/g, "");
-}
+import { sanitizeAmountInput } from "@/lib/amount-input";
 
 type FieldErrors = {
   amount?: string;
@@ -130,6 +127,9 @@ export function AddTransactionDialog({
       };
       if (transaction) await updateTransaction(transaction.id, payload);
       else await addTransaction(payload);
+      toast.success(
+        transaction ? "Transação atualizada com sucesso" : "Nova transação criada com sucesso",
+      );
       setOpen(false);
     } catch (err) {
       toast.error(supabaseErrorMessage(err));

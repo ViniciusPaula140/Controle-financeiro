@@ -1,8 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Plus, Trash2, Landmark } from "lucide-react";
+import { toast } from "sonner";
 import { AppShell } from "@/components/finance/AppShell";
 import { FAB_CLASS } from "@/components/finance/fab-styles";
+import { sanitizeAmountInput } from "@/lib/amount-input";
+import { supabaseErrorMessage } from "@/lib/supabase/realtime-utils";
 import {
   useAccountBalances,
   addAccountBalance,
@@ -96,9 +99,14 @@ function ContasPage() {
       <AccountDialog
         open={creating}
         onOpenChange={setCreating}
-        onSubmit={(data) => {
-          addAccountBalance(data);
-          setCreating(false);
+        onSubmit={async (data) => {
+          try {
+            await addAccountBalance(data);
+            toast.success("Conta criada com sucesso");
+            setCreating(false);
+          } catch (err) {
+            toast.error(supabaseErrorMessage(err));
+          }
         }}
       />
       <AccountDialog
@@ -106,15 +114,26 @@ function ContasPage() {
         open={!!editing}
         onOpenChange={(v) => !v && setEditing(null)}
         initial={editing ?? undefined}
-        onSubmit={(data) => {
-          if (editing) updateAccountBalance(editing.id, data);
-          setEditing(null);
+        onSubmit={async (data) => {
+          if (!editing) return;
+          try {
+            await updateAccountBalance(editing.id, data);
+            toast.success("Conta atualizada com sucesso");
+            setEditing(null);
+          } catch (err) {
+            toast.error(supabaseErrorMessage(err));
+          }
         }}
         onDelete={
           editing
-            ? () => {
-                deleteAccountBalance(editing.id);
-                setEditing(null);
+            ? async () => {
+                try {
+                  await deleteAccountBalance(editing.id);
+                  toast.success("Conta excluída com sucesso");
+                  setEditing(null);
+                } catch (err) {
+                  toast.error(supabaseErrorMessage(err));
+                }
               }
             : undefined
         }
@@ -134,7 +153,7 @@ function AccountDialog({
   onOpenChange: (v: boolean) => void;
   initial?: AccountBalance;
   onSubmit: (data: Omit<AccountBalance, "id">) => void;
-  onDelete?: () => void;
+  onDelete?: () => void | Promise<void>;
 }) {
   const allAccounts = useAccountsList();
   const [account, setAccount] = useState<Account>(initial?.account ?? "Nubank");
@@ -154,7 +173,10 @@ function AccountDialog({
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     const v = parseFloat(balance.replace(",", "."));
-    if (Number.isNaN(v)) return;
+    if (!account.trim() || !balance.trim() || Number.isNaN(v)) {
+      toast.error("O campo de saldo atual deve conter um valor válido.");
+      return;
+    }
     onSubmit({ account, balance: v, note: note || undefined });
   };
 
@@ -182,7 +204,7 @@ function AccountDialog({
               inputMode="decimal"
               placeholder="0,00"
               value={balance}
-              onChange={(e) => setBalance(e.target.value)}
+              onChange={(e) => setBalance(sanitizeAmountInput(e.target.value))}
               className="text-lg"
               autoFocus
             />

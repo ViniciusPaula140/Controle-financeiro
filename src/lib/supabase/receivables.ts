@@ -3,7 +3,11 @@ import { useAuth } from './auth-context';
 import { useEffect, useState } from 'react';
 import { mapReceivableFromDb, mapReceivableToDb } from './mappers';
 import { realtimeChannelName, requireRow } from './realtime-utils';
-import { addTransaction, deleteTransaction } from './transactions';
+import { addTransaction, deleteTransactionRaw } from './transactions';
+import {
+  syncTransactionFromReceivable,
+  receivableDateISO,
+} from './receivable-sync';
 
 export const RECEIVABLE_ALREADY_RECEIVED_DELETE_MSG =
   'Não é possível excluir um registro já recebido. Desmarque-o primeiro.';
@@ -128,6 +132,35 @@ export async function addReceivable(receivable: Omit<Receivable, 'id' | 'user_id
 export async function updateReceivable(id: string, patch: ReceivablePatch) {
   if (!supabase) throw new Error('Supabase client is not configured');
 
+  const { data: existingRow, error: fetchError } = await supabase
+    .from('dinheiro_receber')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+
+  if (fetchError) throw fetchError;
+  const existing = existingRow ? mapReceivableFromDb(existingRow) : null;
+  if (!existing) throw new Error('Recebível não encontrado');
+
+  const nextReceived = patch.received ?? existing.received;
+
+  if (nextReceived && !existing.received) {
+    const merged = { ...existing, ...patch, received: false, txId: undefined, receivedAt: undefined };
+    const { received: _r, receivedAt: _ra, txId: _tx, ...fieldPatch } = patch;
+    if (Object.keys(fieldPatch).length > 0) {
+      await supabase
+        .from('dinheiro_receber')
+        .update(mapReceivableToDb(fieldPatch))
+        .eq('id', id);
+    }
+    return markReceivableReceived({ ...merged, ...fieldPatch } as Receivable, true);
+  }
+
+  if (!nextReceived && existing.received && existing.txId) {
+    await deleteTransactionRaw(existing.txId);
+    patch = { ...patch, received: false, receivedAt: null, txId: null };
+  }
+
   const { data, error } = await supabase
     .from('dinheiro_receber')
     .update(mapReceivableToDb(patch))
@@ -136,19 +169,35 @@ export async function updateReceivable(id: string, patch: ReceivablePatch) {
     .maybeSingle();
 
   if (error) throw error;
-  return mapReceivableFromDb(requireRow(data, 'atualização de recebível'));
+  const updated = mapReceivableFromDb(requireRow(data, 'atualização de recebível'));
+
+  if (updated.received && updated.txId) {
+    await syncTransactionFromReceivable(updated);
+  }
+
+  return updated;
 }
 
 export async function markReceivableReceived(receivable: Receivable, received: boolean) {
   if (!received) {
     if (receivable.txId) {
-      await deleteTransaction(receivable.txId);
+      await deleteTransactionRaw(receivable.txId);
     }
-    return updateReceivable(receivable.id, {
-      received: false,
-      receivedAt: null,
-      txId: null,
-    });
+    const { data, error } = await supabase!
+      .from('dinheiro_receber')
+      .update(
+        mapReceivableToDb({
+          received: false,
+          receivedAt: null,
+          txId: null,
+        }),
+      )
+      .eq('id', receivable.id)
+      .select()
+      .maybeSingle();
+
+    if (error) throw error;
+    return mapReceivableFromDb(requireRow(data, 'atualização de recebível'));
   }
 
   if (receivable.received && receivable.txId) return receivable;
@@ -159,16 +208,26 @@ export async function markReceivableReceived(receivable: Receivable, received: b
     type: 'income',
     category: 'Outros',
     account: 'Nubank',
-    date: receivedAt,
+    date: receivableDateISO({ ...receivable, receivedAt }),
     description: receivable.name,
     note: 'Recebido via "Receber dinheiro"',
   });
 
-  return updateReceivable(receivable.id, {
-    received: true,
-    receivedAt,
-    txId: tx.id,
-  });
+  const { data, error } = await supabase!
+    .from('dinheiro_receber')
+    .update(
+      mapReceivableToDb({
+        received: true,
+        receivedAt,
+        txId: tx.id,
+      }),
+    )
+    .eq('id', receivable.id)
+    .select()
+    .maybeSingle();
+
+  if (error) throw error;
+  return mapReceivableFromDb(requireRow(data, 'atualização de recebível'));
 }
 
 export async function deleteReceivable(id: string) {

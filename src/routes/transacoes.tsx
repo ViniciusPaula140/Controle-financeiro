@@ -22,6 +22,7 @@ import { supabaseErrorMessage } from "@/lib/supabase/realtime-utils";
 import {
   useTransactions,
   deleteTransaction,
+  findReceivableByTransactionId,
   useCategoriesList,
   useAccountsList,
   BRL,
@@ -44,6 +45,20 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+
+type ConfirmAction =
+  | { type: "edit"; transaction: Transaction }
+  | { type: "delete"; transaction: Transaction; itemName: string };
 
 export const Route = createFileRoute("/transacoes")({
   head: () => ({ meta: [{ title: "Transações" }] }),
@@ -85,6 +100,75 @@ function TransacoesPage() {
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<Transaction | null>(null);
   const [editing, setEditing] = useState<Transaction | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
+
+  const handleSelectTransaction = (t: Transaction) => {
+    if (isProcessing || confirmAction) return;
+    setSelected(t);
+  };
+
+  const handleEditRequest = async (t: Transaction) => {
+    if (isProcessing || confirmAction) return;
+    setIsProcessing(true);
+    try {
+      const receivable = await findReceivableByTransactionId(t.id);
+      if (receivable) {
+        setSelected(null);
+        setConfirmAction({ type: "edit", transaction: t });
+      } else {
+        setSelected(null);
+        setEditing(t);
+      }
+    } catch (err) {
+      toast.error(supabaseErrorMessage(err));
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleDeleteRequest = async (t: Transaction) => {
+    if (isProcessing || confirmAction) return;
+    setIsProcessing(true);
+    try {
+      const receivable = await findReceivableByTransactionId(t.id);
+      if (receivable) {
+        const itemName = t.description?.trim() || receivable.name || t.category;
+        setSelected(null);
+        setConfirmAction({ type: "delete", transaction: t, itemName });
+      } else {
+        await deleteTransaction(t.id);
+        toast.success("Transação excluída com sucesso");
+        setSelected(null);
+      }
+    } catch (err) {
+      toast.error(supabaseErrorMessage(err));
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleConfirmEdit = () => {
+    if (confirmAction?.type !== "edit") return;
+    setEditing(confirmAction.transaction);
+    setConfirmAction(null);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (confirmAction?.type !== "delete" || isProcessing) return;
+    const { transaction } = confirmAction;
+    setIsProcessing(true);
+    try {
+      await deleteTransaction(transaction.id);
+      toast.success("Transação excluída com sucesso");
+      setSelected(null);
+      setConfirmAction(null);
+    } catch (err) {
+      toast.error(supabaseErrorMessage(err));
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   const availableYears = useMemo(
     () =>
@@ -365,8 +449,9 @@ function TransacoesPage() {
           return (
             <li key={t.id}>
               <button
-                onClick={() => setSelected(t)}
-                className="flex w-full items-center gap-3 rounded-2xl border border-border bg-card p-3 text-left transition active:scale-[0.99]"
+                onClick={() => handleSelectTransaction(t)}
+                disabled={isProcessing || !!confirmAction}
+                className="flex w-full items-center gap-3 rounded-2xl border border-border bg-card p-3 text-left transition active:scale-[0.99] disabled:pointer-events-none disabled:opacity-60"
               >
                 <div
                 className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${
@@ -399,21 +484,67 @@ function TransacoesPage() {
 
       <TransactionDetailsDialog
         transaction={selected}
-        onClose={() => setSelected(null)}
-        onEdit={(t) => {
+        disabled={isProcessing || !!confirmAction}
+        onClose={() => {
+          if (isProcessing) return;
           setSelected(null);
-          setEditing(t);
         }}
-        onDelete={async (t) => {
-          try {
-            await deleteTransaction(t.id);
-            toast.success("Transação excluída com sucesso");
-            setSelected(null);
-          } catch (err) {
-            toast.error(supabaseErrorMessage(err));
-          }
-        }}
+        onEdit={handleEditRequest}
+        onDelete={handleDeleteRequest}
       />
+
+      <AlertDialog
+        open={confirmAction?.type === "edit"}
+        onOpenChange={(open) => {
+          if (!open && !isProcessing) setConfirmAction(null);
+        }}
+      >
+        <AlertDialogContent className="z-[110] rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Deseja alterar?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Irá ser alterado em receber dinheiro...
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isProcessing}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction disabled={isProcessing} onClick={handleConfirmEdit}>
+              Confirmar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={confirmAction?.type === "delete"}
+        onOpenChange={(open) => {
+          if (!open && !isProcessing) setConfirmAction(null);
+        }}
+      >
+        <AlertDialogContent className="z-[110] rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir transação</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmAction?.type === "delete"
+                ? `Realmente deseja excluir o item ${confirmAction.itemName}? O item não será excluído de 'Receber dinheiro', apenas desmarcado.`
+                : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isProcessing}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isProcessing}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(e) => {
+                e.preventDefault();
+                void handleConfirmDelete();
+              }}
+            >
+              {isProcessing ? "Excluindo..." : "Excluir"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {editing && (
         <AddTransactionDialog
@@ -428,11 +559,13 @@ function TransacoesPage() {
 
 function TransactionDetailsDialog({
   transaction,
+  disabled,
   onClose,
   onEdit,
   onDelete,
 }: {
   transaction: Transaction | null;
+  disabled?: boolean;
   onClose: () => void;
   onEdit: (t: Transaction) => void;
   onDelete: (t: Transaction) => void;
@@ -486,10 +619,10 @@ function TransactionDetailsDialog({
               </div>
             </div>
             <DialogFooter className="flex-col-reverse gap-2 sm:flex-row sm:justify-between">
-              <Button variant="destructive" onClick={() => onDelete(t)}>
+              <Button variant="destructive" disabled={disabled} onClick={() => onDelete(t)}>
                 <Trash2 className="h-4 w-4" /> Excluir
               </Button>
-              <Button onClick={() => onEdit(t)}>
+              <Button disabled={disabled} onClick={() => onEdit(t)}>
                 <Pencil className="h-4 w-4" /> Editar
               </Button>
             </DialogFooter>

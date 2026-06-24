@@ -45,6 +45,9 @@ export function ReceivablesSheet() {
   const [editing, setEditing] = useState<Receivable | null>(null);
   const [creating, setCreating] = useState(false);
   const [isProcessing, setIsProcessing] = useState<string | null>(null);
+  const [dialogBusy, setDialogBusy] = useState(false);
+
+  const uiLocked = isProcessing !== null || dialogBusy;
 
   const grouped = useMemo(() => {
     const map = new Map<number, Map<number, Receivable[]>>();
@@ -128,7 +131,7 @@ export function ReceivablesSheet() {
         </SheetHeader>
 
         <div className="p-5">
-          <Button className="mb-4 w-full" onClick={() => setCreating(true)}>
+          <Button className="mb-4 w-full" onClick={() => setCreating(true)} disabled={uiLocked}>
             <Plus className="h-4 w-4" /> Novo recebimento
           </Button>
 
@@ -166,7 +169,7 @@ export function ReceivablesSheet() {
                                       <span>
                                         <Checkbox
                                           checked
-                                          disabled={isProcessing !== null}
+                                          disabled={uiLocked}
                                           onCheckedChange={(v) => handleToggleReceived(r, v === true)}
                                         />
                                       </span>
@@ -179,7 +182,7 @@ export function ReceivablesSheet() {
                                 ) : (
                                   <Checkbox
                                     checked={r.received}
-                                    disabled={isProcessing !== null}
+                                    disabled={uiLocked}
                                     onCheckedChange={(v) => handleToggleReceived(r, v === true)}
                                   />
                                 )}
@@ -194,8 +197,8 @@ export function ReceivablesSheet() {
                                   <p className="text-xs font-semibold text-primary">{BRL(r.amount)}</p>
                                 </div>
                                 <button
-                                  onClick={() => setEditing(r)}
-                                  disabled={isProcessing !== null}
+                                  onClick={() => !uiLocked && setEditing(r)}
+                                  disabled={uiLocked}
                                   aria-label="Editar"
                                   className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-accent disabled:pointer-events-none disabled:opacity-50"
                                 >
@@ -203,7 +206,7 @@ export function ReceivablesSheet() {
                                 </button>
                                 <button
                                   onClick={() => handleDelete(r)}
-                                  disabled={r.received || isProcessing !== null}
+                                  disabled={r.received || uiLocked}
                                   aria-label="Excluir"
                                   className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-destructive hover:bg-destructive/10 disabled:pointer-events-none disabled:opacity-50"
                                 >
@@ -230,12 +233,15 @@ export function ReceivablesSheet() {
       open={creating}
       onOpenChange={setCreating}
       onSubmit={async (d) => {
+        setDialogBusy(true);
         try {
           await addReceivable(d);
           setCreating(false);
-          toast.success("Recebimento criado com sucesso", { closeButton: true });
+          toast.success("Recebimento criado com sucesso");
         } catch (err) {
           toast.error(supabaseErrorMessage(err));
+        } finally {
+          setDialogBusy(false);
         }
       }}
     />
@@ -246,12 +252,15 @@ export function ReceivablesSheet() {
       initial={editing ?? undefined}
       onSubmit={async (d) => {
         if (!editing) return;
+        setDialogBusy(true);
         try {
           await updateReceivable(editing.id, d);
           setEditing(null);
-          toast.success("Recebimento atualizado com sucesso", { closeButton: true });
+          toast.success("Recebimento atualizado com sucesso");
         } catch (err) {
           toast.error(supabaseErrorMessage(err));
+        } finally {
+          setDialogBusy(false);
         }
       }}
     />

@@ -6,6 +6,7 @@ import { useGoals as useSupabaseGoals, addGoal as addSupabaseGoal, updateGoal as
 import { useFixedBills as useSupabaseFixedBills, addFixedBill as addSupabaseFixedBill, updateFixedBill as updateSupabaseFixedBill, deleteFixedBill as deleteSupabaseFixedBill, deleteFixedBills as deleteSupabaseFixedBills, markFixedBillPaid as markSupabaseFixedBillPaid, FIXED_BILL_ZERO_AMOUNT_MSG } from "./supabase/fixed-bills";
 import { FIXED_BILL_CATEGORY, DEFAULT_PAYMENT_METHOD } from "./supabase/fixed-bill-sync";
 import { useReceivables as useSupabaseReceivables, addReceivable as addSupabaseReceivable, updateReceivable as updateSupabaseReceivable, deleteReceivable as deleteSupabaseReceivable, markReceivableReceived as markSupabaseReceivableReceived, type Receivable as SupabaseReceivable } from "./supabase/receivables";
+export { findReceivableByTransactionId } from "./supabase/receivable-sync";
 
 // Categories and accounts are dynamic strings so the user can create new ones.
 export type Category = string;

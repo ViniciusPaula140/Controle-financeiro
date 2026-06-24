@@ -7,6 +7,10 @@ import {
   syncFixedBillFromTransaction,
   unlinkFixedBillFromTransaction,
 } from './fixed-bill-sync';
+import {
+  syncReceivableFromTransaction,
+  unlinkReceivableFromTransaction,
+} from './receivable-sync';
 
 export interface Transaction {
   id: string;
@@ -153,6 +157,12 @@ export async function updateTransaction(
     description: patch.description,
   });
 
+  await syncReceivableFromTransaction(id, {
+    amount: patch.amount,
+    description: patch.description,
+    date: patch.date,
+  });
+
   return updated;
 }
 
@@ -166,5 +176,6 @@ export async function deleteTransactionRaw(id: string) {
 
 export async function deleteTransaction(id: string) {
   await unlinkFixedBillFromTransaction(id);
+  await unlinkReceivableFromTransaction(id);
   await deleteTransactionRaw(id);
 }

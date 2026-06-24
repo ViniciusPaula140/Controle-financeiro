@@ -50,7 +50,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
@@ -223,8 +222,8 @@ function FixedBillsFiltersPopover({
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-72 rounded-2xl p-4">
-        <div className="space-y-4">
+      <PopoverContent align="start" className="w-72 overflow-hidden rounded-2xl p-0">
+        <div className="max-h-[60vh] space-y-4 overflow-y-auto overscroll-contain p-4 touch-pan-y">
           <div>
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Situação
@@ -336,14 +335,14 @@ function FixedBillsFiltersPopover({
             </div>
           )}
 
-          <div className="flex items-center justify-between pt-1">
-            <Button variant="ghost" size="sm" onClick={clearAll}>
-              Limpar
-            </Button>
-            <Button size="sm" onClick={apply}>
-              Aplicar
-            </Button>
-          </div>
+        </div>
+        <div className="flex shrink-0 items-center justify-between border-t border-border px-4 py-3">
+          <Button variant="ghost" size="sm" onClick={clearAll}>
+            Limpar
+          </Button>
+          <Button size="sm" onClick={apply}>
+            Aplicar
+          </Button>
         </div>
       </PopoverContent>
     </Popover>
@@ -760,11 +759,11 @@ function AddFixedBillsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[90vh] w-[calc(100vw-2rem)] max-w-md flex-col overflow-hidden rounded-2xl p-0">
+      <DialogContent className="flex max-h-[min(90dvh,100svh)] w-[calc(100vw-2rem)] max-w-md flex-col overflow-hidden rounded-2xl p-0 sm:max-h-[90vh]">
         <DialogHeader className="shrink-0 px-6 pt-6">
           <DialogTitle>Adicionar contas fixas</DialogTitle>
         </DialogHeader>
-        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-6 pb-2">
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-6 pb-2 touch-pan-y">
           <div className="grid w-full grid-cols-2 gap-3">
             <div className="min-w-0 space-y-1.5">
               <Label>Mês</Label>
@@ -818,7 +817,7 @@ function AddFixedBillsDialog({
             {allOn ? "Desmarcar tudo" : "Selecionar tudo"}
           </button>
 
-          <div className="max-h-[40vh] space-y-1 overflow-y-auto rounded-xl border border-border p-2">
+          <div className="space-y-1 rounded-xl border border-border p-2">
             {allTemplates.map((item) => {
               const on = items.includes(item);
               return (
@@ -835,7 +834,7 @@ function AddFixedBillsDialog({
             })}
           </div>
         </div>
-        <DialogFooter className="shrink-0 border-t border-border px-6 py-4">
+        <DialogFooter className="shrink-0 border-t border-border bg-background px-6 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <Button className="w-full" onClick={submit} disabled={items.length === 0 || saving}>
             {saving ? "Salvando..." : `Adicionar${items.length > 0 ? ` (${items.length})` : ""}`}
           </Button>
@@ -1068,12 +1067,13 @@ function BulkEditDialog({
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="flex max-h-[90vh] w-[calc(100vw-2rem)] max-w-2xl flex-col overflow-hidden rounded-2xl p-0">
+      <DialogContent className="flex max-h-[min(90dvh,100svh)] w-[calc(100vw-2rem)] max-w-2xl flex-col overflow-hidden rounded-2xl p-0 sm:max-h-[90vh]">
         <DialogHeader className="shrink-0 px-6 pt-6">
           <DialogTitle>Contas fixas — {MONTH_NAMES[m]}/{y}</DialogTitle>
         </DialogHeader>
 
-        <div className="shrink-0 space-y-3 border-b border-border px-6 pb-4">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain touch-pan-y">
+          <div className="space-y-3 border-b border-border px-6 pb-4 pt-1">
           {!showCreateForm ? (
             <Button
               type="button"
@@ -1154,10 +1154,9 @@ function BulkEditDialog({
               </div>
             </div>
           )}
-        </div>
+          </div>
 
-        <ScrollArea className="min-h-0 flex-1 px-6">
-          <div className="py-4">
+          <div className="px-6 py-4">
             {sortedBills.length === 0 ? (
               <p className="py-6 text-center text-sm text-muted-foreground">
                 Nenhuma conta neste mês. Use &quot;Criar novo custo&quot; acima para adicionar.
@@ -1229,9 +1228,9 @@ function BulkEditDialog({
               </Table>
             )}
           </div>
-        </ScrollArea>
+        </div>
 
-        <DialogFooter className="shrink-0 border-t border-border px-6 py-4">
+        <DialogFooter className="shrink-0 border-t border-border bg-background px-6 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <Button variant="ghost" onClick={onClose}>
             Cancelar
           </Button>

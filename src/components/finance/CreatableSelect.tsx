@@ -44,7 +44,10 @@ export function CreatableSelect({
           <ChevronsUpDown className="h-4 w-4 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[--radix-popover-trigger-width] p-0 pointer-events-auto" align="start">
+      <PopoverContent
+        className="z-[110] w-[--radix-popover-trigger-width] p-0 pointer-events-auto"
+        align="start"
+      >
         <Command>
           <CommandInput
             placeholder="Buscar ou criar..."

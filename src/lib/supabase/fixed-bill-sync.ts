@@ -34,6 +34,22 @@ export async function unlinkFixedBillFromTransaction(txId: string) {
   if (error) throw error;
 }
 
+export async function unlinkFixedBillsByTransactionIds(txIds: string[]) {
+  if (!supabase) throw new Error('Supabase client is not configured');
+  if (!txIds.length) return;
+
+  const { error } = await supabase
+    .from('contas_fixas')
+    .update({
+      status_pago: false,
+      pago_em: null,
+      transacao_id: null,
+    })
+    .in('transacao_id', txIds);
+
+  if (error) throw error;
+}
+
 export async function syncFixedBillFromTransaction(
   txId: string,
   patch: { amount?: number; account?: string; description?: string },

@@ -1,12 +1,12 @@
 import { useMemo, useSyncExternalStore } from "react";
-import { useTransactions as useSupabaseTransactions, addTransaction as addSupabaseTransaction, updateTransaction as updateSupabaseTransaction, deleteTransaction as deleteSupabaseTransaction } from "./supabase/transactions";
+import { useTransactions as useSupabaseTransactions, addTransaction as addSupabaseTransaction, updateTransaction as updateSupabaseTransaction, deleteTransaction as deleteSupabaseTransaction, deleteTransactionsBulk as deleteSupabaseTransactionsBulk } from "./supabase/transactions";
 import { useBudgets as useSupabaseBudgets, addBudget as addSupabaseBudget, updateBudget as updateSupabaseBudget, deleteBudget as deleteSupabaseBudget } from "./supabase/budgets";
 import { useAccountBalances as useSupabaseAccountBalances, addAccountBalance as addSupabaseAccountBalance, updateAccountBalance as updateSupabaseAccountBalance, deleteAccountBalance as deleteSupabaseAccountBalance } from "./supabase/account-balances";
 import { useGoals as useSupabaseGoals, addGoal as addSupabaseGoal, updateGoal as updateSupabaseGoal, deleteGoal as deleteSupabaseGoal } from "./supabase/goals";
 import { useFixedBills as useSupabaseFixedBills, addFixedBill as addSupabaseFixedBill, updateFixedBill as updateSupabaseFixedBill, deleteFixedBill as deleteSupabaseFixedBill, deleteFixedBills as deleteSupabaseFixedBills, markFixedBillPaid as markSupabaseFixedBillPaid, FIXED_BILL_ZERO_AMOUNT_MSG } from "./supabase/fixed-bills";
 import { FIXED_BILL_CATEGORY, DEFAULT_PAYMENT_METHOD } from "./supabase/fixed-bill-sync";
 import { useReceivables as useSupabaseReceivables, addReceivable as addSupabaseReceivable, updateReceivable as updateSupabaseReceivable, deleteReceivable as deleteSupabaseReceivable, markReceivableReceived as markSupabaseReceivableReceived, type Receivable as SupabaseReceivable } from "./supabase/receivables";
-export { findReceivableByTransactionId } from "./supabase/receivable-sync";
+export { findReceivableByTransactionId, findReceivablesByTransactionIds } from "./supabase/receivable-sync";
 
 // Categories and accounts are dynamic strings so the user can create new ones.
 export type Category = string;
@@ -221,6 +221,9 @@ export function updateTransaction(id: string, patch: Partial<Omit<Transaction, "
 }
 export function deleteTransaction(id: string) {
   return deleteSupabaseTransaction(id);
+}
+export function deleteTransactionsBulk(ids: string[]) {
+  return deleteSupabaseTransactionsBulk(ids);
 }
 
 const accListeners = new Set<() => void>();

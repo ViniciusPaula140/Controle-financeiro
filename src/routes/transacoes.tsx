@@ -22,7 +22,9 @@ import { supabaseErrorMessage } from "@/lib/supabase/realtime-utils";
 import {
   useTransactions,
   deleteTransaction,
+  deleteTransactionsBulk,
   findReceivableByTransactionId,
+  findReceivablesByTransactionIds,
   useCategoriesList,
   useAccountsList,
   BRL,
@@ -32,6 +34,7 @@ import {
   type Transaction,
 } from "@/lib/finance-store";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Popover,
   PopoverContent,
@@ -58,7 +61,8 @@ import {
 
 type ConfirmAction =
   | { type: "edit"; transaction: Transaction }
-  | { type: "delete"; transaction: Transaction; itemName: string };
+  | { type: "delete"; transaction: Transaction; itemName: string }
+  | { type: "bulk-delete"; ids: string[]; linkedCount: number };
 
 export const Route = createFileRoute("/transacoes")({
   head: () => ({ meta: [{ title: "Transações" }] }),
@@ -102,10 +106,54 @@ function TransacoesPage() {
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [selectionMode, setSelectionMode] = useState(false);
+
+  const uiLocked = isProcessing || !!confirmAction;
 
   const handleSelectTransaction = (t: Transaction) => {
-    if (isProcessing || confirmAction) return;
+    if (uiLocked) return;
     setSelected(t);
+  };
+
+  const toggleRowSelect = (id: string, checked: boolean) => {
+    if (uiLocked) return;
+    setSelectedIds((prev) =>
+      checked ? (prev.includes(id) ? prev : [...prev, id]) : prev.filter((x) => x !== id),
+    );
+  };
+
+  const handleBulkDeleteRequest = async () => {
+    if (uiLocked || selectedIds.length === 0) return;
+    setIsProcessing(true);
+    try {
+      const linked = await findReceivablesByTransactionIds(selectedIds);
+      setConfirmAction({
+        type: "bulk-delete",
+        ids: selectedIds,
+        linkedCount: linked.length,
+      });
+    } catch (err) {
+      toast.error(supabaseErrorMessage(err));
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleConfirmBulkDelete = async () => {
+    if (confirmAction?.type !== "bulk-delete" || isProcessing) return;
+    setIsProcessing(true);
+    try {
+      await deleteTransactionsBulk(confirmAction.ids);
+      toast.success("Transações excluídas com sucesso");
+      setSelectedIds([]);
+      setSelected(null);
+      setConfirmAction(null);
+    } catch (err) {
+      toast.error(supabaseErrorMessage(err));
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const handleEditRequest = async (t: Transaction) => {
@@ -221,6 +269,24 @@ function TransacoesPage() {
       })
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [transactions, query, typeFilter, selectedCats, selectedAccs, selectedYears, selectedMonths]);
+
+  const filteredIds = useMemo(() => filtered.map((t) => t.id), [filtered]);
+
+  const handleSelectAllVisible = () => {
+    if (uiLocked) return;
+    setSelectedIds(filteredIds);
+  };
+
+  const handleClearSelection = () => {
+    if (uiLocked) return;
+    setSelectedIds([]);
+  };
+
+  const handleCloseSelection = () => {
+    if (uiLocked) return;
+    setSelectionMode(false);
+    setSelectedIds([]);
+  };
 
   return (
     <AppShell title="Transações" action={<AddTransactionDialog />}>
@@ -442,16 +508,92 @@ function TransacoesPage() {
           Nenhuma transação encontrada.
         </p>
       ) : (
-        <ul className="space-y-2">
+        <>
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            {!selectionMode ? (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={uiLocked}
+                onClick={() => setSelectionMode(true)}
+              >
+                Selecionar itens
+              </Button>
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={uiLocked}
+                  onClick={handleSelectAllVisible}
+                >
+                  Selecionar todos os itens
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={uiLocked}
+                  onClick={handleClearSelection}
+                >
+                  Limpar seleção
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={uiLocked}
+                  onClick={handleCloseSelection}
+                >
+                  Fechar seleção de itens
+                </Button>
+              </>
+            )}
+          </div>
+
+          {selectionMode && selectedIds.length > 0 && (
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3">
+              <span className="text-sm font-medium text-foreground">
+                {selectedIds.length}{" "}
+                {selectedIds.length === 1 ? "item selecionado" : "itens selecionados"}
+              </span>
+              <Button
+                variant="destructive"
+                size="sm"
+                disabled={uiLocked}
+                onClick={() => void handleBulkDeleteRequest()}
+              >
+                Excluir Selecionados
+              </Button>
+            </div>
+          )}
+
+          <ul className="space-y-2">
           {filtered.map((t) => {
           const Icon = icons[t.category as Category] ?? Tag;
           const isIncome = t.type === "income";
+          const isRowSelected = selectedIds.includes(t.id);
           return (
-            <li key={t.id}>
+            <li key={t.id} className="flex items-stretch gap-2">
+              {selectionMode && (
+                <div
+                  className="flex shrink-0 items-center pl-1"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Checkbox
+                    checked={isRowSelected}
+                    disabled={uiLocked}
+                    onCheckedChange={(v) => toggleRowSelect(t.id, v === true)}
+                    aria-label={`Selecionar ${t.description ?? t.category}`}
+                  />
+                </div>
+              )}
               <button
                 onClick={() => handleSelectTransaction(t)}
-                disabled={isProcessing || !!confirmAction}
-                className="flex w-full items-center gap-3 rounded-2xl border border-border bg-card p-3 text-left transition active:scale-[0.99] disabled:pointer-events-none disabled:opacity-60"
+                disabled={uiLocked}
+                className={`flex min-w-0 flex-1 items-center gap-3 rounded-2xl border bg-card p-3 text-left transition active:scale-[0.99] disabled:pointer-events-none disabled:opacity-60 ${
+                  selectionMode && isRowSelected
+                    ? "border-primary/50 ring-1 ring-primary/20"
+                    : "border-border"
+                }`}
               >
                 <div
                 className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${
@@ -479,12 +621,13 @@ function TransacoesPage() {
             </li>
           );
           })}
-        </ul>
+          </ul>
+        </>
       )}
 
       <TransactionDetailsDialog
         transaction={selected}
-        disabled={isProcessing || !!confirmAction}
+        disabled={uiLocked}
         onClose={() => {
           if (isProcessing) return;
           setSelected(null);
@@ -538,6 +681,38 @@ function TransacoesPage() {
               onClick={(e) => {
                 e.preventDefault();
                 void handleConfirmDelete();
+              }}
+            >
+              {isProcessing ? "Excluindo..." : "Excluir"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={confirmAction?.type === "bulk-delete"}
+        onOpenChange={(open) => {
+          if (!open && !isProcessing) setConfirmAction(null);
+        }}
+      >
+        <AlertDialogContent className="z-[110] rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir transações</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmAction?.type === "bulk-delete" &&
+                (confirmAction.linkedCount > 0
+                  ? `Atenção: Você selecionou ${confirmAction.ids.length} transações, mas ${confirmAction.linkedCount} delas vieram de 'Receber dinheiro'. Elas não serão excluídas de lá, apenas desmarcadas. Deseja continuar?`
+                  : `Tem certeza que deseja excluir ${confirmAction.ids.length} transações permanentemente?`)}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isProcessing}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isProcessing}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(e) => {
+                e.preventDefault();
+                void handleConfirmBulkDelete();
               }}
             >
               {isProcessing ? "Excluindo..." : "Excluir"}

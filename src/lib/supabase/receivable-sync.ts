@@ -34,6 +34,35 @@ export async function unlinkReceivableFromTransaction(txId: string) {
   if (error) throw error;
 }
 
+export async function findReceivablesByTransactionIds(txIds: string[]): Promise<Receivable[]> {
+  if (!supabase) throw new Error('Supabase client is not configured');
+  if (!txIds.length) return [];
+
+  const { data, error } = await supabase
+    .from('dinheiro_receber')
+    .select('*')
+    .in('transacao_id', txIds);
+
+  if (error) throw error;
+  return (data ?? []).map(mapReceivableFromDb);
+}
+
+export async function unlinkReceivablesByIds(receivableIds: string[]) {
+  if (!supabase) throw new Error('Supabase client is not configured');
+  if (!receivableIds.length) return;
+
+  const { error } = await supabase
+    .from('dinheiro_receber')
+    .update({
+      recebido: false,
+      data_recebimento: null,
+      transacao_id: null,
+    })
+    .in('id', receivableIds);
+
+  if (error) throw error;
+}
+
 export function receivableDateISO(receivable: Pick<Receivable, 'year' | 'month' | 'receivedAt'>) {
   const ref = receivable.receivedAt ? new Date(receivable.receivedAt) : new Date();
   const day = ref.getDate();

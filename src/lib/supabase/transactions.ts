@@ -6,10 +6,13 @@ import { realtimeChannelName, requireRow } from './realtime-utils';
 import {
   syncFixedBillFromTransaction,
   unlinkFixedBillFromTransaction,
+  unlinkFixedBillsByTransactionIds,
 } from './fixed-bill-sync';
 import {
   syncReceivableFromTransaction,
   unlinkReceivableFromTransaction,
+  findReceivablesByTransactionIds,
+  unlinkReceivablesByIds,
 } from './receivable-sync';
 
 export interface Transaction {
@@ -178,4 +181,23 @@ export async function deleteTransaction(id: string) {
   await unlinkFixedBillFromTransaction(id);
   await unlinkReceivableFromTransaction(id);
   await deleteTransactionRaw(id);
+}
+
+export async function deleteTransactionsBulk(ids: string[]) {
+  if (!supabase) throw new Error('Supabase client is not configured');
+  if (!ids.length) return { totalCount: 0, linkedReceivableCount: 0 };
+
+  const linkedReceivables = await findReceivablesByTransactionIds(ids);
+  const linkedReceivableIds = linkedReceivables.map((r) => r.id);
+
+  if (linkedReceivableIds.length) {
+    await unlinkReceivablesByIds(linkedReceivableIds);
+  }
+
+  await unlinkFixedBillsByTransactionIds(ids);
+
+  const { error } = await supabase.from('transacoes').delete().in('id', ids);
+  if (error) throw error;
+
+  return { totalCount: ids.length, linkedReceivableCount: linkedReceivableIds.length };
 }

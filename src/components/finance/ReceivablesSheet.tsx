@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { Plus, Pencil, Trash2, Inbox, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -99,6 +99,7 @@ export function ReceivablesSheet() {
   };
 
   return (
+    <>
     <Sheet>
       <TooltipProvider delayDuration={200}>
         <Tooltip>
@@ -222,38 +223,39 @@ export function ReceivablesSheet() {
             </TooltipProvider>
           )}
         </div>
-
-        <ReceivableDialog
-          open={creating}
-          onOpenChange={setCreating}
-          onSubmit={async (d) => {
-            try {
-              await addReceivable(d);
-              setCreating(false);
-              toast.success("Recebimento criado com sucesso");
-            } catch (err) {
-              toast.error(supabaseErrorMessage(err));
-            }
-          }}
-        />
-        <ReceivableDialog
-          key={editing?.id ?? "none"}
-          open={!!editing}
-          onOpenChange={(v) => !v && setEditing(null)}
-          initial={editing ?? undefined}
-          onSubmit={async (d) => {
-            if (!editing) return;
-            try {
-              await updateReceivable(editing.id, d);
-              setEditing(null);
-              toast.success("Recebimento atualizado com sucesso");
-            } catch (err) {
-              toast.error(supabaseErrorMessage(err));
-            }
-          }}
-        />
       </SheetContent>
     </Sheet>
+
+    <ReceivableDialog
+      open={creating}
+      onOpenChange={setCreating}
+      onSubmit={async (d) => {
+        try {
+          await addReceivable(d);
+          setCreating(false);
+          toast.success("Recebimento criado com sucesso", { closeButton: true });
+        } catch (err) {
+          toast.error(supabaseErrorMessage(err));
+        }
+      }}
+    />
+    <ReceivableDialog
+      key={editing?.id ?? "none"}
+      open={!!editing}
+      onOpenChange={(v) => !v && setEditing(null)}
+      initial={editing ?? undefined}
+      onSubmit={async (d) => {
+        if (!editing) return;
+        try {
+          await updateReceivable(editing.id, d);
+          setEditing(null);
+          toast.success("Recebimento atualizado com sucesso", { closeButton: true });
+        } catch (err) {
+          toast.error(supabaseErrorMessage(err));
+        }
+      }}
+    />
+    </>
   );
 }
 
@@ -268,28 +270,55 @@ function ReceivableDialog({
   initial?: Receivable;
   onSubmit: (data: Omit<Receivable, "id">) => void | Promise<void>;
 }) {
-  const today = new Date();
+  const formId = useId();
   const [name, setName] = useState(initial?.name ?? "");
   const [amount, setAmount] = useState(initial ? String(initial.amount).replace(".", ",") : "");
-  const [year, setYear] = useState(initial?.year ?? today.getFullYear());
-  const [month, setMonth] = useState(initial?.month ?? today.getMonth());
+  const [year, setYear] = useState(() => initial?.year ?? new Date().getFullYear());
+  const [month, setMonth] = useState(() => initial?.month ?? new Date().getMonth());
   const [received, setReceived] = useState(initial?.received ?? false);
   const [saving, setSaving] = useState(false);
 
+  useEffect(() => {
+    if (!open) return;
+    const now = new Date();
+    setName(initial?.name ?? "");
+    setAmount(initial ? String(initial.amount).replace(".", ",") : "");
+    setYear(initial?.year ?? now.getFullYear());
+    setMonth(initial?.month ?? now.getMonth());
+    setReceived(initial?.received ?? false);
+    setSaving(false);
+  }, [open, initial]);
+
+  const validateAndBuild = () => {
+    const trimmedName = name.trim();
+    const v = parseFloat(amount.replace(",", "."));
+    if (!trimmedName) {
+      toast.error("Informe o nome do recebimento.");
+      return null;
+    }
+    if (!amount.trim() || Number.isNaN(v) || v <= 0) {
+      toast.error("Informe um valor válido maior que zero.");
+      return null;
+    }
+    return {
+      name: trimmedName,
+      amount: v,
+      year,
+      month,
+      received,
+      receivedAt: received ? initial?.receivedAt ?? new Date().toISOString() : undefined,
+    } satisfies Omit<Receivable, "id">;
+  };
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const v = parseFloat(amount.replace(",", "."));
-    if (!name.trim() || !v) return;
+    const payload = validateAndBuild();
+    if (!payload) return;
     setSaving(true);
     try {
-      await onSubmit({
-        name: name.trim(),
-        amount: v,
-        year,
-        month,
-        received,
-        receivedAt: received ? initial?.receivedAt ?? new Date().toISOString() : undefined,
-      });
+      await onSubmit(payload);
+    } catch (err) {
+      toast.error(supabaseErrorMessage(err));
     } finally {
       setSaving(false);
     }
@@ -297,43 +326,66 @@ function ReceivableDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm rounded-2xl">
-        <DialogHeader>
+      <DialogContent className="z-[100] flex max-h-[min(90dvh,100svh)] w-[calc(100vw-2rem)] max-w-sm flex-col overflow-hidden rounded-2xl p-0 sm:max-h-[85vh]">
+        <DialogHeader className="shrink-0 px-6 pt-6 text-left">
           <DialogTitle>{initial ? "Editar recebimento" : "Novo recebimento"}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={submit} className="space-y-3">
-          <div className="space-y-1.5">
-            <Label htmlFor="rname">Nome</Label>
-            <Input id="rname" placeholder="Ex: Salário 1" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="ramt">Valor (R$)</Label>
-            <Input id="ramt" inputMode="decimal" placeholder="0,00" value={amount} onChange={(e) => setAmount(sanitizeAmountInput(e.target.value))} />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
+        <form
+          id={formId}
+          onSubmit={submit}
+          className="flex min-h-0 flex-1 flex-col"
+        >
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-6 pb-4">
             <div className="space-y-1.5">
-              <Label>Mês</Label>
-              <select
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-                value={month}
-                onChange={(e) => setMonth(Number(e.target.value))}
-              >
-                {MONTH_NAMES.map((n, i) => (
-                  <option key={n} value={i}>{n}</option>
-                ))}
-              </select>
+              <Label htmlFor="rname">Nome</Label>
+              <Input
+                id="rname"
+                placeholder="Ex: Salário 1"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                enterKeyHint="next"
+              />
             </div>
             <div className="space-y-1.5">
-              <Label>Ano</Label>
-              <Input type="number" value={year} onChange={(e) => setYear(Number(e.target.value))} />
+              <Label htmlFor="ramt">Valor (R$)</Label>
+              <Input
+                id="ramt"
+                inputMode="decimal"
+                placeholder="0,00"
+                value={amount}
+                onChange={(e) => setAmount(sanitizeAmountInput(e.target.value))}
+                enterKeyHint="done"
+              />
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Mês</Label>
+                <select
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+                  value={month}
+                  onChange={(e) => setMonth(Number(e.target.value))}
+                >
+                  {MONTH_NAMES.map((n, i) => (
+                    <option key={n} value={i}>{n}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Ano</Label>
+                <Input type="number" value={year} onChange={(e) => setYear(Number(e.target.value))} />
+              </div>
+            </div>
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox checked={received} onCheckedChange={(v) => setReceived(v === true)} />
+              Já recebido
+            </label>
           </div>
-          <label className="flex items-center gap-2 text-sm">
-            <Checkbox checked={received} onCheckedChange={(v) => setReceived(v === true)} />
-            Já recebido
-          </label>
-          <DialogFooter>
-            <Button type="submit" className="w-full" disabled={saving}>
+          <DialogFooter className="relative z-50 shrink-0 border-t border-border bg-background px-6 py-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+            <Button
+              type="submit"
+              className="relative z-50 w-full touch-manipulation"
+              disabled={saving}
+            >
               {saving ? "Salvando..." : initial ? "Salvar" : "Adicionar"}
             </Button>
           </DialogFooter>

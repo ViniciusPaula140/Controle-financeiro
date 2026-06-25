@@ -221,11 +221,12 @@ function GoalDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm rounded-2xl">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[90vh] max-w-sm flex-col gap-0 overflow-hidden rounded-2xl p-0">
+        <DialogHeader className="shrink-0 px-6 pt-6">
           <DialogTitle>{initial && initial.id !== "__new__" ? "Editar meta" : "Nova meta"}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={submit} className="space-y-3">
+        <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
+          <div className="flex-1 space-y-3 overflow-y-auto p-6">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Mês</Label>
@@ -250,11 +251,14 @@ function GoalDialog({
             <Label htmlFor="gnote">Observação</Label>
             <Input id="gnote" placeholder="Opcional" value={note} onChange={(e) => setNote(e.target.value)} />
           </div>
+          </div>
+          <div className="shrink-0 border-t p-4">
           <DialogFooter>
             <Button type="submit" className="w-full" disabled={isSubmitting}>
               {isSubmitting ? "Salvando..." : "Salvar"}
             </Button>
           </DialogFooter>
+          </div>
         </form>
       </DialogContent>
     </Dialog>

@@ -236,11 +236,12 @@ function BudgetDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm rounded-2xl">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[90vh] max-w-sm flex-col gap-0 overflow-hidden rounded-2xl p-0">
+        <DialogHeader className="shrink-0 px-6 pt-6">
           <DialogTitle>{initial ? "Editar orçamento" : "Criar orçamento"}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={submit} className="space-y-3">
+        <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
+          <div className="flex-1 space-y-3 overflow-y-auto p-6">
           <div className="space-y-1.5">
             <Label htmlFor="bname">Nome do orçamento</Label>
             <Input
@@ -274,11 +275,14 @@ function BudgetDialog({
               onChange={(e) => setLimit(sanitizeAmountInput(e.target.value))}
             />
           </div>
+          </div>
+          <div className="shrink-0 border-t p-4">
           <DialogFooter>
             <Button type="submit" className="w-full" disabled={isSubmitting}>
               {isSubmitting ? "Salvando..." : initial ? "Salvar" : "Criar"}
             </Button>
           </DialogFooter>
+          </div>
         </form>
       </DialogContent>
     </Dialog>

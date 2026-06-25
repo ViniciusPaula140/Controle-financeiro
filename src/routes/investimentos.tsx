@@ -203,11 +203,12 @@ function AccountDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm rounded-2xl">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[90vh] max-w-sm flex-col gap-0 overflow-hidden rounded-2xl p-0">
+        <DialogHeader className="shrink-0 px-6 pt-6">
           <DialogTitle>{initial ? "Editar Conta" : "Nova Conta"}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={submit} className="space-y-4">
+        <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
+          <div className="flex-1 space-y-4 overflow-y-auto p-6">
           <div className="space-y-1.5">
             <Label>Banco</Label>
             <CreatableSelect
@@ -240,6 +241,8 @@ function AccountDialog({
               rows={3}
             />
           </div>
+          </div>
+          <div className="shrink-0 border-t p-4">
           <DialogFooter className="flex-col-reverse gap-2 sm:flex-row sm:justify-between">
             {onDelete ? (
               <Button type="button" variant="destructive" onClick={onDelete}>
@@ -252,6 +255,7 @@ function AccountDialog({
               {isSubmitting ? "Salvando..." : initial ? "Salvar" : "Adicionar"}
             </Button>
           </DialogFooter>
+          </div>
         </form>
       </DialogContent>
     </Dialog>

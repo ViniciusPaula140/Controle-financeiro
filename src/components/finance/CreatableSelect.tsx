@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type WheelEvent, type TouchEvent } from "react";
 import { Check, ChevronsUpDown, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,8 +31,20 @@ export function CreatableSelect({
   const trimmed = query.trim();
   const exists = options.some((o) => o.toLowerCase() === trimmed.toLowerCase());
 
+  const keepScrollInsideList = (e: TouchEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+  };
+
+  const handleListWheel = (e: WheelEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    const list = e.currentTarget;
+    if (list.scrollHeight <= list.clientHeight) return;
+    e.preventDefault();
+    list.scrollTop += e.deltaY;
+  };
+
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={setOpen} modal={false}>
       <PopoverTrigger asChild>
         <Button
           type="button"
@@ -47,6 +59,8 @@ export function CreatableSelect({
       <PopoverContent
         className="z-[110] w-[--radix-popover-trigger-width] p-0 pointer-events-auto"
         align="start"
+        onTouchStart={keepScrollInsideList}
+        onTouchMove={keepScrollInsideList}
       >
         <Command>
           <CommandInput
@@ -54,7 +68,12 @@ export function CreatableSelect({
             value={query}
             onValueChange={setQuery}
           />
-          <CommandList>
+          <CommandList
+            className="max-h-[160px] overflow-y-auto overscroll-contain pointer-events-auto touch-pan-y [webkit-overflow-scrolling:touch]"
+            onWheel={handleListWheel}
+            onTouchStart={keepScrollInsideList}
+            onTouchMove={keepScrollInsideList}
+          >
             <CommandEmpty>
               {trimmed && onCreate ? (
                 <button
@@ -73,7 +92,7 @@ export function CreatableSelect({
                 <span className="block px-3 py-2 text-sm text-muted-foreground">Nada encontrado</span>
               )}
             </CommandEmpty>
-            <CommandGroup>
+            <CommandGroup className="overflow-visible">
               {options.map((o) => (
                 <CommandItem
                   key={o}

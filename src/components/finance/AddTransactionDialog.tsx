@@ -152,11 +152,12 @@ export function AddTransactionDialog({
           )}
         </DialogTrigger>
       )}
-      <DialogContent className="max-w-sm rounded-2xl">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[90vh] max-w-sm flex-col gap-0 overflow-hidden rounded-2xl p-0">
+        <DialogHeader className="shrink-0 px-6 pt-6">
           <DialogTitle>{transaction ? "Editar Transação" : "Nova Transação"}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={submit} className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+        <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
+          <div className="flex-1 space-y-4 overflow-y-auto p-6">
           <div className="grid grid-cols-2 gap-2 rounded-xl bg-muted p-1">
             <button
               type="button"
@@ -255,7 +256,8 @@ export function AddTransactionDialog({
               rows={3}
             />
           </div>
-
+          </div>
+          <div className="shrink-0 space-y-3 border-t p-4">
           <label className="flex items-center gap-2 text-sm text-foreground">
             <Checkbox
               checked={recurring}
@@ -267,6 +269,7 @@ export function AddTransactionDialog({
           <Button type="submit" className="w-full" size="lg" disabled={saving}>
             {saving ? "Salvando..." : transaction ? "Salvar alterações" : "Salvar"}
           </Button>
+          </div>
         </form>
       </DialogContent>
     </Dialog>

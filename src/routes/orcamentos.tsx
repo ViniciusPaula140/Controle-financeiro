@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/finance/AppShell";
@@ -151,6 +151,7 @@ function OrcamentosPage() {
             setCreating(false);
           } catch (err) {
             toast.error(supabaseErrorMessage(err));
+            throw err;
           }
         }}
       />
@@ -167,6 +168,7 @@ function OrcamentosPage() {
             setEditing(null);
           } catch (err) {
             toast.error(supabaseErrorMessage(err));
+            throw err;
           }
         }}
       />
@@ -183,29 +185,53 @@ function BudgetDialog({
   open: boolean;
   onOpenChange: (v: boolean) => void;
   initial?: Budget;
-  onSubmit: (d: Omit<Budget, "id">) => void;
+  onSubmit: (d: Omit<Budget, "id">) => void | Promise<void>;
 }) {
   const categories = useCategoriesList();
   const [name, setName] = useState(initial?.name ?? "");
   const [category, setCategory] = useState(initial?.category ?? "");
   const [limit, setLimit] = useState(initial ? String(initial.limit).replace(".", ",") : "");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      isSubmittingRef.current = false;
+      setIsSubmitting(false);
+      return;
+    }
     setName(initial?.name ?? "");
     setCategory(initial?.category ?? "");
     setLimit(initial ? String(initial.limit).replace(".", ",") : "");
+    isSubmittingRef.current = false;
+    setIsSubmitting(false);
   }, [open, initial]);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+    setIsSubmitting(true);
     const v = parseFloat(limit.replace(",", "."));
     if (!name.trim() || !limit.trim() || Number.isNaN(v) || v <= 0) {
       toast.error("Os campos de Nome do orçamento e Valor devem conter valores válidos.");
+      isSubmittingRef.current = false;
+      setIsSubmitting(false);
       return;
     }
-    if (!category.trim()) return;
-    onSubmit({ category: category.trim(), limit: v, name: name.trim() });
+    if (!category.trim()) {
+      isSubmittingRef.current = false;
+      setIsSubmitting(false);
+      return;
+    }
+    try {
+      await onSubmit({ category: category.trim(), limit: v, name: name.trim() });
+    } catch {
+      // erro exibido pelo handler pai
+    } finally {
+      isSubmittingRef.current = false;
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -249,8 +275,8 @@ function BudgetDialog({
             />
           </div>
           <DialogFooter>
-            <Button type="submit" className="w-full">
-              {initial ? "Salvar" : "Criar"}
+            <Button type="submit" className="w-full" disabled={isSubmitting}>
+              {isSubmitting ? "Salvando..." : initial ? "Salvar" : "Criar"}
             </Button>
           </DialogFooter>
         </form>

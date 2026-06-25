@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Plus, Trash2, Landmark } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/finance/AppShell";
@@ -106,6 +106,7 @@ function ContasPage() {
             setCreating(false);
           } catch (err) {
             toast.error(supabaseErrorMessage(err));
+            throw err;
           }
         }}
       />
@@ -122,6 +123,7 @@ function ContasPage() {
             setEditing(null);
           } catch (err) {
             toast.error(supabaseErrorMessage(err));
+            throw err;
           }
         }}
         onDelete={
@@ -152,7 +154,7 @@ function AccountDialog({
   open: boolean;
   onOpenChange: (v: boolean) => void;
   initial?: AccountBalance;
-  onSubmit: (data: Omit<AccountBalance, "id">) => void;
+  onSubmit: (data: Omit<AccountBalance, "id">) => void | Promise<void>;
   onDelete?: () => void | Promise<void>;
 }) {
   const allAccounts = useAccountsList();
@@ -161,23 +163,42 @@ function AccountDialog({
     initial ? String(initial.balance).replace(".", ",") : "",
   );
   const [note, setNote] = useState(initial?.note ?? "");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
 
   useEffect(() => {
-    if (open) {
-      setAccount(initial?.account ?? "Nubank");
-      setBalance(initial ? String(initial.balance).replace(".", ",") : "");
-      setNote(initial?.note ?? "");
+    if (!open) {
+      isSubmittingRef.current = false;
+      setIsSubmitting(false);
+      return;
     }
+    setAccount(initial?.account ?? "Nubank");
+    setBalance(initial ? String(initial.balance).replace(".", ",") : "");
+    setNote(initial?.note ?? "");
+    isSubmittingRef.current = false;
+    setIsSubmitting(false);
   }, [open, initial]);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+    setIsSubmitting(true);
     const v = parseFloat(balance.replace(",", "."));
     if (!account.trim() || !balance.trim() || Number.isNaN(v)) {
       toast.error("O campo de saldo atual deve conter um valor válido.");
+      isSubmittingRef.current = false;
+      setIsSubmitting(false);
       return;
     }
-    onSubmit({ account, balance: v, note: note || undefined });
+    try {
+      await onSubmit({ account, balance: v, note: note || undefined });
+    } catch {
+      // erro exibido pelo handler pai
+    } finally {
+      isSubmittingRef.current = false;
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -227,7 +248,9 @@ function AccountDialog({
             ) : (
               <span />
             )}
-            <Button type="submit">{initial ? "Salvar" : "Adicionar"}</Button>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? "Salvando..." : initial ? "Salvar" : "Adicionar"}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

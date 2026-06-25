@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Pencil, Trash2, Trophy } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -136,6 +136,7 @@ function MetasPage() {
               setEditing(null);
             } catch (err) {
               toast.error(supabaseErrorMessage(err));
+              throw err;
             }
           }}
         />
@@ -152,6 +153,7 @@ function MetasPage() {
               setEditing(null);
             } catch (err) {
               toast.error(supabaseErrorMessage(err));
+              throw err;
             }
           }}
         />
@@ -168,7 +170,7 @@ function GoalDialog({
   open: boolean;
   onOpenChange: (v: boolean) => void;
   initial?: Goal;
-  onSubmit: (d: Omit<Goal, "id">) => void;
+  onSubmit: (d: Omit<Goal, "id">) => void | Promise<void>;
 }) {
   const today = new Date();
   const [year, setYear] = useState(initial?.year ?? today.getFullYear());
@@ -177,24 +179,44 @@ function GoalDialog({
     initial && initial.amount ? String(initial.amount).replace(".", ",") : "",
   );
   const [note, setNote] = useState(initial?.note ?? "");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      isSubmittingRef.current = false;
+      setIsSubmitting(false);
+      return;
+    }
     setYear(initial?.year ?? today.getFullYear());
     setMonth(initial?.month ?? today.getMonth());
     setAmount(initial && initial.amount ? String(initial.amount).replace(".", ",") : "");
     setNote(initial?.note ?? "");
+    isSubmittingRef.current = false;
+    setIsSubmitting(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initial]);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+    setIsSubmitting(true);
     const v = parseFloat(amount.replace(",", "."));
     if (!amount.trim() || Number.isNaN(v) || v <= 0) {
       toast.error("Preencha todos os campos obrigatórios com valores válidos para criar a meta.");
+      isSubmittingRef.current = false;
+      setIsSubmitting(false);
       return;
     }
-    onSubmit({ year, month, amount: v, note: note.trim() || undefined });
+    try {
+      await onSubmit({ year, month, amount: v, note: note.trim() || undefined });
+    } catch {
+      // erro exibido pelo handler pai
+    } finally {
+      isSubmittingRef.current = false;
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -229,7 +251,9 @@ function GoalDialog({
             <Input id="gnote" placeholder="Opcional" value={note} onChange={(e) => setNote(e.target.value)} />
           </div>
           <DialogFooter>
-            <Button type="submit" className="w-full">Salvar</Button>
+            <Button type="submit" className="w-full" disabled={isSubmitting}>
+              {isSubmitting ? "Salvando..." : "Salvar"}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

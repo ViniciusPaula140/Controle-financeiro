@@ -13,12 +13,14 @@ import {
   X,
   Pencil,
   Trash2,
+  ChevronDown,
   type LucideIcon,
 } from "lucide-react";
 import { AppShell } from "@/components/finance/AppShell";
 import { AddTransactionDialog } from "@/components/finance/AddTransactionDialog";
 import { toast } from "sonner";
 import { supabaseErrorMessage } from "@/lib/supabase/realtime-utils";
+import { isoToLocalDateInput } from "@/lib/date-utils";
 import {
   useTransactions,
   deleteTransaction,
@@ -41,6 +43,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -86,8 +89,26 @@ function txLocalParts(iso: string) {
   return { year: d.getFullYear(), month: d.getMonth() };
 }
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
+function formatDayHeader(dateKey: string) {
+  const [y, m, d] = dateKey.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("pt-BR", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function dailyBalance(items: Transaction[]) {
+  return items.reduce(
+    (sum, t) => sum + (t.type === "income" ? t.amount : -t.amount),
+    0,
+  );
+}
+
+function dailyBalanceClass(balance: number) {
+  if (balance > 0) return "text-green-600";
+  if (balance < 0) return "text-red-600";
+  return "text-muted-foreground";
 }
 
 function TransacoesPage() {
@@ -269,6 +290,23 @@ function TransacoesPage() {
       })
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [transactions, query, typeFilter, selectedCats, selectedAccs, selectedYears, selectedMonths]);
+
+  const groupedByDay = useMemo(() => {
+    const map = new Map<string, Transaction[]>();
+    for (const t of filtered) {
+      const key = isoToLocalDateInput(t.date);
+      const list = map.get(key);
+      if (list) list.push(t);
+      else map.set(key, [t]);
+    }
+    return [...map.entries()]
+      .sort(([a], [b]) => b.localeCompare(a))
+      .map(([dateKey, items]) => ({
+        dateKey,
+        transactions: items,
+        balance: dailyBalance(items),
+      }));
+  }, [filtered]);
 
   const filteredIds = useMemo(() => filtered.map((t) => t.id), [filtered]);
 
@@ -566,62 +604,21 @@ function TransacoesPage() {
             </div>
           )}
 
-          <ul className="space-y-2">
-          {filtered.map((t) => {
-          const Icon = icons[t.category as Category] ?? Tag;
-          const isIncome = t.type === "income";
-          const isRowSelected = selectedIds.includes(t.id);
-          return (
-            <li key={t.id} className="flex items-stretch gap-2">
-              {selectionMode && (
-                <div
-                  className="flex shrink-0 items-center pl-1"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <Checkbox
-                    checked={isRowSelected}
-                    disabled={uiLocked}
-                    onCheckedChange={(v) => toggleRowSelect(t.id, v === true)}
-                    aria-label={`Selecionar ${t.description ?? t.category}`}
-                  />
-                </div>
-              )}
-              <button
-                onClick={() => handleSelectTransaction(t)}
-                disabled={uiLocked}
-                className={`flex min-w-0 flex-1 items-center gap-3 rounded-2xl border bg-card p-3 text-left transition active:scale-[0.99] disabled:pointer-events-none disabled:opacity-60 ${
-                  selectionMode && isRowSelected
-                    ? "border-primary/50 ring-1 ring-primary/20"
-                    : "border-border"
-                }`}
-              >
-                <div
-                className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${
-                  isIncome ? "bg-accent text-primary" : "bg-secondary text-foreground"
-                }`}
-                >
-                  <Icon className="h-5 w-5" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-foreground">
-                    {t.description ?? t.category}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {t.category} • {t.account} • {formatDate(t.date)}
-                  </p>
-                </div>
-                <p
-                  className={`shrink-0 text-sm font-semibold ${
-                    isIncome ? "text-primary" : "text-destructive"
-                  }`}
-                >
-                  {isIncome ? "+" : "−"} {BRL(t.amount)}
-                </p>
-              </button>
-            </li>
-          );
-          })}
-          </ul>
+          <div className="space-y-4">
+          {groupedByDay.map(({ dateKey, transactions: dayTransactions, balance }) => (
+            <DailyTransactionGroup
+              key={dateKey}
+              dateKey={dateKey}
+              balance={balance}
+              transactions={dayTransactions}
+              selectionMode={selectionMode}
+              selectedIds={selectedIds}
+              uiLocked={uiLocked}
+              onSelectTransaction={handleSelectTransaction}
+              onToggleRowSelect={toggleRowSelect}
+            />
+          ))}
+          </div>
         </>
       )}
 
@@ -805,6 +802,108 @@ function TransactionDetailsDialog({
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+function DailyTransactionGroup({
+  dateKey,
+  balance,
+  transactions,
+  selectionMode,
+  selectedIds,
+  uiLocked,
+  onSelectTransaction,
+  onToggleRowSelect,
+}: {
+  dateKey: string;
+  balance: number;
+  transactions: Transaction[];
+  selectionMode: boolean;
+  selectedIds: string[];
+  uiLocked: boolean;
+  onSelectTransaction: (t: Transaction) => void;
+  onToggleRowSelect: (id: string, checked: boolean) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(true);
+
+  return (
+    <section>
+      <button
+        type="button"
+        onClick={() => setIsOpen((prev) => !prev)}
+        aria-expanded={isOpen}
+        className="flex w-full cursor-pointer items-center justify-between gap-2 rounded-md bg-muted/60 px-4 py-1 text-left text-xs font-semibold transition-colors hover:bg-muted"
+      >
+        <span className="flex min-w-0 items-center gap-2">
+          <ChevronDown
+            className={cn(
+              "h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200",
+              !isOpen && "rotate-180",
+            )}
+          />
+          <span className="truncate text-foreground">{formatDayHeader(dateKey)}</span>
+        </span>
+        <span className={cn("shrink-0", dailyBalanceClass(balance))}>{BRL(balance)}</span>
+      </button>
+      {isOpen && (
+        <ul className="mt-2 space-y-2">
+          {transactions.map((t) => {
+            const Icon = icons[t.category as Category] ?? Tag;
+            const isIncome = t.type === "income";
+            const isRowSelected = selectedIds.includes(t.id);
+            return (
+              <li key={t.id} className="flex items-stretch gap-2">
+                {selectionMode && (
+                  <div
+                    className="flex shrink-0 items-center pl-1"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Checkbox
+                      checked={isRowSelected}
+                      disabled={uiLocked}
+                      onCheckedChange={(v) => onToggleRowSelect(t.id, v === true)}
+                      aria-label={`Selecionar ${t.description ?? t.category}`}
+                    />
+                  </div>
+                )}
+                <button
+                  onClick={() => onSelectTransaction(t)}
+                  disabled={uiLocked}
+                  className={`flex min-w-0 flex-1 items-center gap-3 rounded-2xl border bg-card p-3 text-left transition active:scale-[0.99] disabled:pointer-events-none disabled:opacity-60 ${
+                    selectionMode && isRowSelected
+                      ? "border-primary/50 ring-1 ring-primary/20"
+                      : "border-border"
+                  }`}
+                >
+                  <div
+                    className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${
+                      isIncome ? "bg-accent text-primary" : "bg-secondary text-foreground"
+                    }`}
+                  >
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-foreground">
+                      {t.description ?? t.category}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {t.category} • {t.account}
+                    </p>
+                  </div>
+                  <p
+                    className={`shrink-0 text-sm font-semibold ${
+                      isIncome ? "text-primary" : "text-destructive"
+                    }`}
+                  >
+                    {isIncome ? "+" : "−"} {BRL(t.amount)}
+                  </p>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
   );
 }
 

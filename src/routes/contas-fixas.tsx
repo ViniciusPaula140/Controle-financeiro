@@ -15,6 +15,7 @@ import {
   lastMonthWithBills,
   copyFixedBillsFromMonth,
   useAccountsList,
+  addAccountName,
   DEFAULT_PAYMENT_METHOD,
   BRL,
   MONTH_NAMES,
@@ -52,6 +53,7 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { CreatableSelect } from "@/components/finance/CreatableSelect";
 
 export const Route = createFileRoute("/contas-fixas")({
   head: () => ({ meta: [{ title: "Contas Fixas" }] }),
@@ -945,17 +947,13 @@ function EditFixedBillDialog({
           </div>
           <div className="space-y-1.5">
             <Label>Método de pagamento</Label>
-            <select
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+            <CreatableSelect
               value={account}
-              onChange={(e) => setAccount(e.target.value)}
-            >
-              {accounts.map((a) => (
-                <option key={a} value={a}>
-                  {a}
-                </option>
-              ))}
-            </select>
+              options={accounts}
+              onChange={setAccount}
+              onCreate={(v) => addAccountName(v)}
+              placeholder="Ex: Nubank, PIX..."
+            />
           </div>
           <div className="space-y-1.5">
             <Label>Separado</Label>
@@ -1149,17 +1147,13 @@ function BulkEditDialog({
                 </div>
                 <div className="space-y-1.5">
                   <Label>Método de pagamento</Label>
-                  <select
-                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+                  <CreatableSelect
                     value={newAccount}
-                    onChange={(e) => setNewAccount(e.target.value)}
-                  >
-                    {accounts.map((a) => (
-                      <option key={a} value={a}>
-                        {a}
-                      </option>
-                    ))}
-                  </select>
+                    options={accounts}
+                    onChange={setNewAccount}
+                    onCreate={(v) => addAccountName(v)}
+                    placeholder="Ex: Nubank, PIX..."
+                  />
                 </div>
               </div>
               <div className="flex gap-2">
@@ -1257,19 +1251,15 @@ function BulkEditDialog({
                           />
                         </TableCell>
                         <TableCell>
-                          <select
-                            className="flex h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm"
+                          <CreatableSelect
                             value={draft[b.id].account}
-                            onChange={(e) =>
-                              setDraft({ ...draft, [b.id]: { ...draft[b.id], account: e.target.value } })
+                            options={accounts}
+                            onChange={(v) =>
+                              setDraft({ ...draft, [b.id]: { ...draft[b.id], account: v } })
                             }
-                          >
-                            {accounts.map((a) => (
-                              <option key={a} value={a}>
-                                {a}
-                              </option>
-                            ))}
-                          </select>
+                            onCreate={(v) => addAccountName(v)}
+                            placeholder="Pagamento"
+                          />
                         </TableCell>
                       </TableRow>
                     ) : null,

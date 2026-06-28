@@ -23,7 +23,7 @@ import {
   type Account,
 } from "@/lib/finance-store";
 import { supabaseErrorMessage } from "@/lib/supabase/realtime-utils";
-import { sanitizeAmountInput } from "@/lib/amount-input";
+import { amountInputFocusProps, isZeroAmount, sanitizeAmountInput } from "@/lib/amount-input";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -390,6 +390,22 @@ function ContasFixasPage() {
     }
   };
 
+  const handleToggleSeparated = async (bill: FixedBill) => {
+    if (processingBillId !== null) return;
+    const next: FixedBill["separated"] = bill.separated === "ok" ? "pendente" : "ok";
+    setProcessingBillId(bill.id);
+    try {
+      await updateFixedBill(bill.id, { separated: next });
+      toast.success(
+        next === "ok" ? `${bill.item} marcado como separado` : `${bill.item} marcado como pendente`,
+      );
+    } catch (err) {
+      toast.error(supabaseErrorMessage(err));
+    } finally {
+      setProcessingBillId(null);
+    }
+  };
+
   return (
     <AppShell
       title="Contas Fixas"
@@ -549,13 +565,25 @@ function ContasFixasPage() {
                                         <FixedBillStatusBadge bill={b} />
                                       </TableCell>
                                       <TableCell className="text-center">
-                                        <span
-                                          className={`text-[10px] font-semibold uppercase ${
+                                        <button
+                                          type="button"
+                                          onClick={() => handleToggleSeparated(b)}
+                                          disabled={processingBillId !== null}
+                                          aria-label={
+                                            b.separated === "ok"
+                                              ? "Marcar separação como pendente"
+                                              : "Marcar separação como OK"
+                                          }
+                                          className={`inline-flex min-w-[2.75rem] items-center justify-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase transition hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50 ${
                                             b.separated === "ok" ? "text-primary" : "text-amber-600"
                                           }`}
                                         >
-                                          {b.separated === "ok" ? "OK" : "Pend."}
-                                        </span>
+                                          {processingBillId === b.id
+                                            ? "..."
+                                            : b.separated === "ok"
+                                              ? "OK"
+                                              : "Pend."}
+                                        </button>
                                       </TableCell>
                                       <TableCell className="text-center">
                                         {b.paid && b.paidAt ? (
@@ -903,7 +931,12 @@ function EditFixedBillDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Valor (R$)</Label>
-              <Input inputMode="decimal" value={amount} onChange={(e) => setAmount(sanitizeAmountInput(e.target.value))} />
+              <Input
+                inputMode="decimal"
+                value={amount}
+                onChange={(e) => setAmount(sanitizeAmountInput(e.target.value))}
+                {...amountInputFocusProps(setAmount)}
+              />
             </div>
             <div className="space-y-1.5">
               <Label>Dia venc.</Label>
@@ -1111,6 +1144,7 @@ function BulkEditDialog({
                     placeholder="0,00"
                     value={newAmount}
                     onChange={(e) => setNewAmount(sanitizeAmountInput(e.target.value))}
+                    {...amountInputFocusProps(setNewAmount)}
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -1193,6 +1227,22 @@ function BulkEditDialog({
                                 [b.id]: { ...draft[b.id], amount: sanitizeAmountInput(e.target.value) },
                               })
                             }
+                            onFocus={(e) => {
+                              if (isZeroAmount(e.target.value)) {
+                                setDraft({
+                                  ...draft,
+                                  [b.id]: { ...draft[b.id], amount: "" },
+                                });
+                              }
+                            }}
+                            onBlur={(e) => {
+                              if (e.target.value.trim() === "") {
+                                setDraft({
+                                  ...draft,
+                                  [b.id]: { ...draft[b.id], amount: "0,00" },
+                                });
+                              }
+                            }}
                           />
                         </TableCell>
                         <TableCell>

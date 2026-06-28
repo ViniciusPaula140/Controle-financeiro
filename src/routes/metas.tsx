@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 import { AppShell } from "@/components/finance/AppShell";
 import { FAB_CLASS } from "@/components/finance/fab-styles";
-import { sanitizeAmountInput } from "@/lib/amount-input";
+import { amountInputFocusProps, sanitizeAmountInput } from "@/lib/amount-input";
 import { supabaseErrorMessage } from "@/lib/supabase/realtime-utils";
 import {
   useGoals,
@@ -245,7 +245,7 @@ function GoalDialog({
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="gamt">Valor da meta (R$)</Label>
-            <Input id="gamt" inputMode="decimal" placeholder="0,00" value={amount} onChange={(e) => setAmount(sanitizeAmountInput(e.target.value))} autoFocus />
+            <Input id="gamt" inputMode="decimal" placeholder="0,00" value={amount} onChange={(e) => setAmount(sanitizeAmountInput(e.target.value))} {...amountInputFocusProps(setAmount)} autoFocus />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="gnote">Observação</Label>

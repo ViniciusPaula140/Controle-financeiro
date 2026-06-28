@@ -28,7 +28,7 @@ import {
   type Transaction,
 } from "@/lib/finance-store";
 import { CreatableSelect } from "./CreatableSelect";
-import { sanitizeAmountInput } from "@/lib/amount-input";
+import { amountInputFocusProps, sanitizeAmountInput } from "@/lib/amount-input";
 
 type FieldErrors = {
   amount?: string;
@@ -192,6 +192,7 @@ export function AddTransactionDialog({
                 setAmount(sanitizeAmountInput(e.target.value));
                 if (errors.amount) setErrors((prev) => ({ ...prev, amount: undefined }));
               }}
+              {...amountInputFocusProps(setAmount)}
               className={`text-lg ${errors.amount ? "border-destructive" : ""}`}
               autoFocus
             />

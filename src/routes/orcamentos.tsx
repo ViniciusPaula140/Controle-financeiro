@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { AppShell } from "@/components/finance/AppShell";
 import { FAB_CLASS } from "@/components/finance/fab-styles";
 import { CreatableSelect } from "@/components/finance/CreatableSelect";
-import { sanitizeAmountInput } from "@/lib/amount-input";
+import { amountInputFocusProps, sanitizeAmountInput } from "@/lib/amount-input";
 import { supabaseErrorMessage } from "@/lib/supabase/realtime-utils";
 import {
   useTransactions,
@@ -273,6 +273,7 @@ function BudgetDialog({
               placeholder="0,00"
               value={limit}
               onChange={(e) => setLimit(sanitizeAmountInput(e.target.value))}
+              {...amountInputFocusProps(setLimit)}
             />
           </div>
           </div>

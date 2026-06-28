@@ -39,12 +39,33 @@ const DEFAULT_ACCOUNTS: Account[] = [
   "Banco do Brasil",
 ];
 
-// Categories/accounts are derived from actual usage. A name only appears in the
-// option list while at least one transaction or budget references it
-// (garbage-collected). addCategory/addAccountName are kept as no-ops because
-// the value is persisted when the parent form (transaction/budget) is saved.
-export function addCategory(_name: string) {}
-export function addAccountName(_name: string) {}
+// Custom names created via CreatableSelect appear immediately in option lists.
+const customCategories = new Set<string>();
+const customAccounts = new Set<string>();
+const categoryOptionListeners = new Set<() => void>();
+const accountOptionListeners = new Set<() => void>();
+
+function emitCategoryOptions() {
+  categoryOptionListeners.forEach((l) => l());
+}
+
+function emitAccountOptions() {
+  accountOptionListeners.forEach((l) => l());
+}
+
+export function addCategory(name: string) {
+  const v = name.trim();
+  if (!v || customCategories.has(v)) return;
+  customCategories.add(v);
+  emitCategoryOptions();
+}
+
+export function addAccountName(name: string) {
+  const v = name.trim();
+  if (!v || customAccounts.has(v)) return;
+  customAccounts.add(v);
+  emitAccountOptions();
+}
 /** @deprecated derived from data */
 export const ALL_ACCOUNTS = DEFAULT_ACCOUNTS;
 
@@ -470,26 +491,44 @@ export const BRL = (n: number) =>
 export function useCategoriesList(): Category[] {
   const txs = useTransactions();
   const bs = useBudgets();
+  const customVersion = useSyncExternalStore(
+    (cb) => {
+      categoryOptionListeners.add(cb);
+      return () => categoryOptionListeners.delete(cb);
+    },
+    () => customCategories.size,
+    () => customCategories.size,
+  );
   return useMemo(() => {
     const s = new Set<string>(DEFAULT_CATEGORIES);
+    customCategories.forEach((c) => s.add(c));
     txs.forEach((t) => t.category && s.add(t.category));
     bs.forEach((b) => b.category && s.add(b.category));
-    return [...s].sort((a, b) => a.localeCompare(b));
-  }, [txs, bs]);
+    return [...s].sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }, [txs, bs, customVersion]);
 }
 /** Accounts shown in selectors = union of accounts in use (tx, balances, bills). */
 export function useAccountsList(): Account[] {
   const txs = useTransactions();
   const bals = useAccountBalances();
   const bills = useFixedBills();
+  const customVersion = useSyncExternalStore(
+    (cb) => {
+      accountOptionListeners.add(cb);
+      return () => accountOptionListeners.delete(cb);
+    },
+    () => customAccounts.size,
+    () => customAccounts.size,
+  );
   return useMemo(() => {
     const s = new Set<string>();
     DEFAULT_ACCOUNTS.forEach((a) => s.add(a));
+    customAccounts.forEach((a) => s.add(a));
     txs.forEach((t) => t.account && s.add(t.account));
     bals.forEach((b) => b.account && s.add(b.account));
     bills.forEach((b) => b.account && s.add(b.account));
-    return [...s].sort((a, b) => a.localeCompare(b));
-  }, [txs, bals, bills]);
+    return [...s].sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }, [txs, bals, bills, customVersion]);
 }
 
 const STATIC_CATEGORY_COLORS: Record<string, string> = {

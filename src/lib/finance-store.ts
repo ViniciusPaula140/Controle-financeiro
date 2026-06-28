@@ -6,6 +6,7 @@ import { useGoals as useSupabaseGoals, addGoal as addSupabaseGoal, updateGoal as
 import { useFixedBills as useSupabaseFixedBills, addFixedBill as addSupabaseFixedBill, updateFixedBill as updateSupabaseFixedBill, deleteFixedBill as deleteSupabaseFixedBill, deleteFixedBills as deleteSupabaseFixedBills, markFixedBillPaid as markSupabaseFixedBillPaid, FIXED_BILL_ZERO_AMOUNT_MSG } from "./supabase/fixed-bills";
 import { FIXED_BILL_CATEGORY, DEFAULT_PAYMENT_METHOD } from "./supabase/fixed-bill-sync";
 import { useReceivables as useSupabaseReceivables, addReceivable as addSupabaseReceivable, updateReceivable as updateSupabaseReceivable, deleteReceivable as deleteSupabaseReceivable, markReceivableReceived as markSupabaseReceivableReceived, type Receivable as SupabaseReceivable } from "./supabase/receivables";
+import { useCaixinhas as useSupabaseCaixinhas, addCaixinha as addSupabaseCaixinha, depositToCaixinha as depositSupabaseCaixinha, withdrawFromCaixinha as withdrawSupabaseCaixinha } from "./supabase/caixinhas";
 export { findReceivableByTransactionId, findReceivablesByTransactionIds } from "./supabase/receivable-sync";
 
 // Categories and accounts are dynamic strings so the user can create new ones.
@@ -119,6 +120,13 @@ export interface FixedBill {
   account?: Account;
   /** Linked auto-generated transaction id (when marked paid). */
   txId?: string;
+}
+
+export interface Caixinha {
+  id: string;
+  nome: string;
+  saldo_guardado: number;
+  created_at?: string;
 }
 
 export interface AlertSettings {
@@ -400,6 +408,40 @@ export async function copyFixedBillsFromMonth(
 /** Marks a bill paid (or unpaid). Syncs with linked transaction. */
 export async function markFixedBillPaid(bill: FixedBill, paid: boolean) {
   return markSupabaseFixedBillPaid(bill, paid);
+}
+
+// ---------- Caixinhas ----------
+export function useCaixinhas() {
+  const { caixinhas } = useSupabaseCaixinhas();
+  return caixinhas ?? [];
+}
+
+export function addCaixinha(data: Pick<Caixinha, "nome">) {
+  return addSupabaseCaixinha(data);
+}
+
+export function depositToCaixinha(id: string, amount: number) {
+  return depositSupabaseCaixinha(id, amount);
+}
+
+export function withdrawFromCaixinha(id: string, amount: number) {
+  return withdrawSupabaseCaixinha(id, amount);
+}
+
+/** Receitas − despesas − total guardado nas caixinhas. */
+export function useLiquidBalanceAvailable() {
+  const transactions = useTransactions();
+  const caixinhas = useCaixinhas();
+  return useMemo(() => {
+    const income = transactions
+      .filter((t) => t.type === "income")
+      .reduce((sum, t) => sum + (t.amount ?? 0), 0);
+    const expenses = transactions
+      .filter((t) => t.type === "expense")
+      .reduce((sum, t) => sum + (t.amount ?? 0), 0);
+    const allocated = caixinhas.reduce((sum, c) => sum + (c.saldo_guardado ?? 0), 0);
+    return income - expenses - allocated;
+  }, [transactions, caixinhas]);
 }
 
 // ---------- Alert Settings ----------

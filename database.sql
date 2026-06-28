@@ -95,6 +95,16 @@ CREATE TABLE IF NOT EXISTS public.contas_bancarias (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
+-- Tabela de caixinhas (envelope budgeting)
+CREATE TABLE IF NOT EXISTS public.caixinhas (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  nome TEXT NOT NULL,
+  saldo_guardado NUMERIC NOT NULL DEFAULT 0 CHECK (saldo_guardado >= 0),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
 -- ============================================
 -- ROW LEVEL SECURITY (RLS)
 -- ============================================
@@ -107,6 +117,7 @@ ALTER TABLE public.contas_fixas ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.dinheiro_receber ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.metas ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.contas_bancarias ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.caixinhas ENABLE ROW LEVEL SECURITY;
 
 -- Políticas RLS para perfis_usuario
 CREATE POLICY "Usuários podem ver seu próprio perfil"
@@ -223,6 +234,23 @@ CREATE POLICY "Usuários podem excluir suas próprias contas bancárias"
   ON public.contas_bancarias FOR DELETE
   USING (auth.uid() = user_id);
 
+-- Políticas RLS para caixinhas
+CREATE POLICY "Usuários podem ver suas próprias caixinhas"
+  ON public.caixinhas FOR SELECT
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Usuários podem inserir suas próprias caixinhas"
+  ON public.caixinhas FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Usuários podem atualizar suas próprias caixinhas"
+  ON public.caixinhas FOR UPDATE
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Usuários podem excluir suas próprias caixinhas"
+  ON public.caixinhas FOR DELETE
+  USING (auth.uid() = user_id);
+
 -- ============================================
 -- ÍNDICES PARA MELHORAR PERFORMANCE
 -- ============================================
@@ -246,6 +274,8 @@ CREATE INDEX IF NOT EXISTS idx_metas_user_id ON public.metas(user_id);
 CREATE INDEX IF NOT EXISTS idx_metas_mes_ano ON public.metas(user_id, mes, ano);
 
 CREATE INDEX IF NOT EXISTS idx_contas_bancarias_user_id ON public.contas_bancarias(user_id);
+
+CREATE INDEX IF NOT EXISTS idx_caixinhas_user_id ON public.caixinhas(user_id);
 
 -- ============================================
 -- TRIGGER PARA ATUALIZAR updated_at AUTOMATICAMENTE
@@ -285,6 +315,10 @@ CREATE TRIGGER handle_updated_at_metas
 
 CREATE TRIGGER handle_updated_at_contas_bancarias
   BEFORE UPDATE ON public.contas_bancarias
+  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+
+CREATE TRIGGER handle_updated_at_caixinhas
+  BEFORE UPDATE ON public.caixinhas
   FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
 -- ============================================

@@ -4,6 +4,7 @@ import type { AccountBalance } from './account-balances';
 import type { Goal } from './goals';
 import type { FixedBill } from './fixed-bills';
 import type { Receivable } from './receivables';
+import type { Caixinha } from './caixinhas';
 
 type DbRow = Record<string, unknown>;
 
@@ -172,5 +173,22 @@ export function mapReceivableToDb(
   if (receivable.received !== undefined) row.recebido = receivable.received;
   if (receivable.receivedAt !== undefined) row.data_recebimento = receivable.receivedAt;
   if (receivable.txId !== undefined) row.transacao_id = receivable.txId;
+  return row;
+}
+
+export function mapCaixinhaFromDb(row: DbRow): Caixinha {
+  return {
+    id: row.id as string,
+    nome: row.nome as string,
+    saldo_guardado: Number(row.saldo_guardado),
+    user_id: row.user_id as string,
+    created_at: (row.created_at as string) ?? undefined,
+  };
+}
+
+export function mapCaixinhaToDb(caixinha: Partial<Omit<Caixinha, 'id' | 'user_id'>>): DbRow {
+  const row: DbRow = {};
+  if (caixinha.nome !== undefined) row.nome = caixinha.nome;
+  if (caixinha.saldo_guardado !== undefined) row.saldo_guardado = caixinha.saldo_guardado;
   return row;
 }

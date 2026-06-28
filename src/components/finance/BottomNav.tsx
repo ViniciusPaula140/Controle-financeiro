@@ -4,7 +4,7 @@ import { NAV_ITEMS } from "./nav-items";
 export function BottomNav() {
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80 lg:hidden">
-      <ul className="mx-auto grid max-w-lg grid-cols-6">
+      <ul className="mx-auto grid max-w-lg grid-cols-7">
         {NAV_ITEMS.map(({ to, shortLabel, icon: Icon }) => (
           <li key={to}>
             <Link

@@ -17,6 +17,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as InvestimentosRouteImport } from './routes/investimentos'
 import { Route as InicioRouteImport } from './routes/inicio'
 import { Route as ContasFixasRouteImport } from './routes/contas-fixas'
+import { Route as CaixinhasRouteImport } from './routes/caixinhas'
 import { Route as IndexRouteImport } from './routes/index'
 
 const TransacoesRoute = TransacoesRouteImport.update({
@@ -59,6 +60,11 @@ const ContasFixasRoute = ContasFixasRouteImport.update({
   path: '/contas-fixas',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CaixinhasRoute = CaixinhasRouteImport.update({
+  id: '/caixinhas',
+  path: '/caixinhas',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -67,6 +73,7 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/caixinhas': typeof CaixinhasRoute
   '/contas-fixas': typeof ContasFixasRoute
   '/inicio': typeof InicioRoute
   '/investimentos': typeof InvestimentosRoute
@@ -78,6 +85,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/caixinhas': typeof CaixinhasRoute
   '/contas-fixas': typeof ContasFixasRoute
   '/inicio': typeof InicioRoute
   '/investimentos': typeof InvestimentosRoute
@@ -90,6 +98,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/caixinhas': typeof CaixinhasRoute
   '/contas-fixas': typeof ContasFixasRoute
   '/inicio': typeof InicioRoute
   '/investimentos': typeof InvestimentosRoute
@@ -103,6 +112,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/caixinhas'
     | '/contas-fixas'
     | '/inicio'
     | '/investimentos'
@@ -114,6 +124,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/caixinhas'
     | '/contas-fixas'
     | '/inicio'
     | '/investimentos'
@@ -125,6 +136,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/caixinhas'
     | '/contas-fixas'
     | '/inicio'
     | '/investimentos'
@@ -137,6 +149,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  CaixinhasRoute: typeof CaixinhasRoute
   ContasFixasRoute: typeof ContasFixasRoute
   InicioRoute: typeof InicioRoute
   InvestimentosRoute: typeof InvestimentosRoute
@@ -205,6 +218,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ContasFixasRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/caixinhas': {
+      id: '/caixinhas'
+      path: '/caixinhas'
+      fullPath: '/caixinhas'
+      preLoaderRoute: typeof CaixinhasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -217,6 +237,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  CaixinhasRoute: CaixinhasRoute,
   ContasFixasRoute: ContasFixasRoute,
   InicioRoute: InicioRoute,
   InvestimentosRoute: InvestimentosRoute,
